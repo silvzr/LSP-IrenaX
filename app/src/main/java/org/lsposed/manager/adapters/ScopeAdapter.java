@@ -292,6 +292,26 @@ public class ScopeAdapter extends EmptyStateRecyclerView.EmptyStateAdapter<Scope
                 fragment.showHint(R.string.enable_documentui, true);
                 return false;
             }
+        } else if (itemId == R.id.select_all) {
+            var tmpChkList = new HashSet<ApplicationWithEquals>(ConfigManager.getModuleScope(module.packageName));
+            for (AppInfo info : searchList) {
+                if (info.packageName.equals("android")) {
+                    fragment.showHint(R.string.reboot_required, true, R.string.reboot, v -> ConfigManager.reboot());
+                }
+                tmpChkList.add(info.application);
+            }
+            ConfigManager.setModuleScope(module.packageName, module.legacy, tmpChkList);
+        } else if (itemId == R.id.select_none) {
+            var tmpChkList = new HashSet<ApplicationWithEquals>(ConfigManager.getModuleScope(module.packageName));
+            for (AppInfo info : searchList) {
+                if (tmpChkList.remove(info.application) && info.packageName.equals("android")) {
+                    fragment.showHint(R.string.reboot_required, true, R.string.reboot, v -> ConfigManager.reboot());
+                }
+            }
+            ConfigManager.setModuleScope(module.packageName, module.legacy, tmpChkList);
+        } else if (itemId == R.id.auto_include) {
+            item.setChecked(!item.isChecked());
+            ConfigManager.setAutoInclude(module.packageName, item.isChecked());
         } else if (!AppHelper.onOptionsItemSelected(item, preferences)) {
             return false;
         }
@@ -371,6 +391,7 @@ public class ScopeAdapter extends EmptyStateRecyclerView.EmptyStateAdapter<Scope
             }
             case 0 -> menu.findItem(R.id.item_sort_by_name).setChecked(true);
         }
+        menu.findItem(R.id.auto_include).setChecked(ConfigManager.getAutoInclude(module.packageName));
     }
 
     @Override

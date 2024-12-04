@@ -45,6 +45,7 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import org.lsposed.daemon.BuildConfig;
+import org.lsposed.lspd.models.Application;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -151,8 +152,10 @@ public class LSPosedService extends ILSPosedService.Stub {
                 if (moduleName != null) {
                     LSPNotificationManager.cancelNotification(UPDATED_CHANNEL_ID, moduleName, userId);
                 }
+                break;
             }
             case Intent.ACTION_PACKAGE_ADDED, Intent.ACTION_PACKAGE_CHANGED -> {
+                var configManager = ConfigManager.getInstance();
                 // make sure that the change is for the complete package, not only a
                 // component
                 String[] components = intent.getStringArrayExtra(Intent.EXTRA_CHANGED_COMPONENT_NAME_LIST);
@@ -164,10 +167,32 @@ public class LSPosedService extends ILSPosedService.Stub {
                     // module to send a broadcast when modules that have not been activated are
                     // uninstalled.
                     // If cache not updated, assume it's not xposed module
-                    isXposedModule = ConfigManager.getInstance().updateModuleApkPath(moduleName, ConfigManager.getInstance().getModuleApkPath(applicationInfo), false);
-                } else if (ConfigManager.getInstance().isUidHooked(uid)) {
-                    // it will auto update obsolete scope from database
-                    ConfigManager.getInstance().updateAppCache();
+                    isXposedModule = configManager.updateModuleApkPath(moduleName, ConfigManager.getInstance().getModuleApkPath(applicationInfo), false);
+                } else {
+                    if (configManager.isUidHooked(uid)) {
+                        // it will automatically remove obsolete app from database
+                        configManager.updateAppCache();
+                    }
+                    if (intentAction.equals(Intent.ACTION_PACKAGE_ADDED) && !intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
+                        for (String xposedModule : configManager.getAutoIncludeModules()) {
+                            // For Xposed modules with auto_include set, we always add new applications
+                            // to its scope
+                            var list = configManager.getModuleScope(xposedModule);
+                            if (list != null) {
+                                Application scope = new Application();
+                                scope.packageName = moduleName;
+                                scope.userId = userId;
+                                list.add(scope);
+                                try {
+                                    if (!configManager.setModuleScope(xposedModule, list)) {
+                                        Log.e(TAG, "failed to set scope for " + xposedModule);
+                                    }
+                                } catch(RemoteException re) {
+                                    Log.e(TAG, "failed to set scope for " + xposedModule, re);
+                                }
+                            }
+                        }
+                    }
                 }
                 broadcastAndShowNotification(moduleName, userId, intent, isXposedModule);
             }

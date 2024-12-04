@@ -87,4 +87,8 @@ interface ILSPManagerService {
     boolean enableStatusNotification() = 47;
 
     void setEnableStatusNotification(boolean enable) = 48;
+
+    boolean getAutoInclude(String packageName) = 49;
+
+    boolean setAutoInclude(String packageName, boolean enable) = 50;
 }

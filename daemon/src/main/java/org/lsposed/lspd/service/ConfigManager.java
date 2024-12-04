@@ -32,6 +32,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageParser;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
 import android.os.Build;
 import android.os.Bundle;
@@ -144,7 +145,9 @@ public class ConfigManager {
             "module_pkg_name text NOT NULL UNIQUE," +
             "apk_path text NOT NULL, " +
             "enabled BOOLEAN DEFAULT 0 " +
-            "CHECK (enabled IN (0, 1))" +
+            "CHECK (enabled IN (0, 1))," +
+            "auto_include BOOLEAN DEFAULT 0 " +
+            "CHECK (auto_include IN (0, 1))" +
             ");");
     private final SQLiteStatement createScopeTable = db.compileStatement("CREATE TABLE IF NOT EXISTS scope (" +
             "mid integer," +
@@ -420,6 +423,20 @@ public class ConfigManager {
                         db.compileStatement("UPDATE scope SET app_pkg_name = 'system' WHERE app_pkg_name = 'android';").execute();
                         db.setVersion(3);
                     });
+                case 3:
+                    try {
+                        executeInTransaction(() -> {
+                            db.compileStatement("ALTER TABLE modules ADD COLUMN auto_include BOOLEAN DEFAULT 0 CHECK (auto_include IN (0, 1));").execute();
+                            db.setVersion(4);
+                        });
+                    } catch (SQLiteException ex) {
+                        // Fix wrong init code for new column auto_include
+                        if (ex.getMessage().startsWith("duplicate column name: auto_include")) {
+                            db.setVersion(4);
+                        } else {
+                            throw ex;
+                        }
+                    }
                 default:
                     break;
             }
@@ -919,20 +936,7 @@ public class ConfigManager {
 
 
     public String[] enabledModules() {
-        try (Cursor cursor = db.query("modules", new String[]{"module_pkg_name"}, "enabled = 1", null, null, null, null)) {
-            if (cursor == null) {
-                Log.e(TAG, "query enabled modules failed");
-                return null;
-            }
-            int modulePkgNameIdx = cursor.getColumnIndex("module_pkg_name");
-            HashSet<String> result = new HashSet<>();
-            while (cursor.moveToNext()) {
-                var pkgName = cursor.getString(modulePkgNameIdx);
-                if (pkgName.equals("lspd")) continue;
-                result.add(pkgName);
-            }
-            return result.toArray(new String[0]);
-        }
+        return listModules("enabled");
     }
 
     public boolean removeModule(String packageName) {
@@ -1242,5 +1246,42 @@ public class ConfigManager {
 
     SharedMemory getAccessMatrixMemory() {
         return accessMatrixMemory;
+    }
+
+    public boolean getAutoInclude(String packageName) {
+        try (Cursor cursor = db.query("modules", new String[]{"auto_include"},
+               "module_pkg_name = ? and auto_include = 1", new String[]{packageName}, null, null, null, null)) {
+            return cursor == null || cursor.moveToNext();
+        }
+    }
+
+    public boolean setAutoInclude(String packageName, boolean enable) {
+        boolean changed = executeInTransaction(() -> {
+            ContentValues values = new ContentValues();
+            values.put("auto_include", enable ? 1 : 0);
+            return db.update("modules", values, "module_pkg_name = ?", new String[]{packageName}) > 0;
+        });
+        return true;
+    }
+
+    public String[] getAutoIncludeModules() {
+        return listModules("auto_include");
+    }
+
+    private String[] listModules(String column) {
+        try (Cursor cursor = db.query("modules", new String[]{"module_pkg_name"}, column + " = 1", null, null, null, null)) {
+            if (cursor == null) {
+                Log.e(TAG, "query " + column + " modules failed");
+                return null;
+            }
+            int modulePkgNameIdx = cursor.getColumnIndex("module_pkg_name");
+            HashSet<String> result = new HashSet<>();
+            while (cursor.moveToNext()) {
+                var pkgName = cursor.getString(modulePkgNameIdx);
+                if (pkgName.equals("lspd")) continue;
+                result.add(pkgName);
+            }
+            return result.toArray(new String[0]);
+        }
     }
 }

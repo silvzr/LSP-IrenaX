@@ -371,4 +371,23 @@ public class ConfigManager {
             return ILSPManagerService.DEX2OAT_CRASHED;
         }
     }
+
+    public static boolean getAutoInclude(String packageName) {
+        try {
+            return LSPManagerServiceHolder.getService().getAutoInclude(packageName);
+        } catch (RemoteException e) {
+            Log.e(App.TAG, Log.getStackTraceString(e));
+            return false;
+        }
+    }
+
+    public static boolean setAutoInclude(String packageName, boolean enable) {
+        try {
+            LSPManagerServiceHolder.getService().setAutoInclude(packageName, enable);
+            return true;
+        } catch (RemoteException e) {
+            Log.e(App.TAG, Log.getStackTraceString(e));
+            return false;
+        }
+    }
 }
