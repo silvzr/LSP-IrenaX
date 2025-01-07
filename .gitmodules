@@ -10,9 +10,6 @@
 [submodule "external/fmt"]
 	path = external/fmt
 	url = https://github.com/fmtlib/fmt.git
-[submodule "external/cxx"]
-	path = external/cxx
-	url = https://github.com/topjohnwu/libcxx.git
 [submodule "external/xz-embedded"]
 	path = external/xz-embedded
 	url = https://github.com/tukaani-project/xz-embedded.git
