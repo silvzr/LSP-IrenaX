@@ -141,7 +141,10 @@ if [ "$API" -ge 29 ]; then
   sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/" "$MODPATH/bin/dex2oat32"
   sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/" "$MODPATH/bin/dex2oat64"
 else
-  extract "$ZIPFILE" 'system.prop' "$MODPATH"
+  ui_print "*********************************************************"
+  ui_print "! Cannot support Android version < 10"
+  ui_print "! Please use something else, or really just buy a new phone"
+  abort    "*********************************************************"
 fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644

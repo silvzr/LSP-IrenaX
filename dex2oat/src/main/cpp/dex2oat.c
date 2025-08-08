@@ -21,6 +21,7 @@
 // Created by Nullptr on 2022/4/1.
 //
 
+#define __USE_GNU
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -89,46 +90,147 @@ static int recv_fd(int sockfd) {
 
 static int read_int(int fd) {
     int val;
-    if (read(fd, &val, sizeof(val)) != sizeof(val))
-        return -1;
+    ssize_t read_bytes = 0;
+    while (read_bytes < sizeof(val)) {
+        ssize_t ret = TEMP_FAILURE_RETRY(read(fd, ((char *)&val) + read_bytes, sizeof(val) - read_bytes));
+        if (ret < 0) {
+            PLOGE("read failed");
+
+            return -1;
+        }
+
+        read_bytes += ret;
+    }
+
     return val;
 }
 
 static void write_int(int fd, int val) {
-    if (fd < 0) return;
-    write(fd, &val, sizeof(val));
+    ssize_t written_bytes = 0;
+    while (written_bytes < sizeof(val)) {
+        ssize_t ret = TEMP_FAILURE_RETRY(write(fd, ((char *)&val) + written_bytes, sizeof(val) - written_bytes));
+        if (ret < 0) {
+            PLOGE("write failed");
+
+            return;
+        }
+
+        written_bytes += ret;
+    }
+}
+
+static void write_string(int fd, const char *str, size_t len) {
+    write_int(fd, (int)len);
+    if (len > 0) write(fd, str, len);
 }
 
 int main(int argc, char **argv) {
-    LOGD("dex2oat wrapper ppid=%d", getppid());
-    struct sockaddr_un sock = {};
-    sock.sun_family = AF_UNIX;
-    strlcpy(sock.sun_path + 1, kSockName, sizeof(sock.sun_path) - 1);
+    LOGD("dex2oat wrapper ppid=%d, uid=%d", getppid(), getuid());
+
+    if (getenv("LD_LIBRARY_PATH") == NULL) {
+        char const *libenv = LP_SELECT(
+            "LD_LIBRARY_PATH=/apex/com.android.art/lib:/apex/com.android.os.statsd/lib",
+            "LD_LIBRARY_PATH=/apex/com.android.art/lib64:/apex/com.android.os.statsd/lib64");
+        putenv((char *)libenv);
+    }
+
     int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    size_t len = sizeof(sa_family_t) + strlen(sock.sun_path + 1) + 1;
-    if (connect(sock_fd, (struct sockaddr *) &sock, len)) {
-        PLOGE("failed to connect to %s", sock.sun_path + 1);
+    if (sock_fd < 0) {
+        PLOGE("failed to create socket");
+
         return 1;
     }
+
+    struct sockaddr_un sock = {
+        .sun_family = AF_UNIX,
+        .sun_path = { 0 },
+    };
+    strlcpy(sock.sun_path + 1, kSockName, sizeof(sock.sun_path) - 1);
+
+    size_t len = sizeof(sa_family_t) + strlen(sock.sun_path + 1) + 1;
+    sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (connect(sock_fd, (struct sockaddr *) &sock, len)) {
+        PLOGE("failed to connect to %s", sock.sun_path + 1);
+
+        return 1;
+    }
+
+    write_int(sock_fd, 1); /* INFO: libpreload fd retrieval op */
     write_int(sock_fd, ID_VEC(LP_SELECT(0, 1), strstr(argv[0], "dex2oatd") != NULL));
+
     int stock_fd = recv_fd(sock_fd);
-    read_int(sock_fd);
+    if (stock_fd == -1) {
+        PLOGE("failed to read stock dex2oat");
+
+        close(sock_fd);
+
+        return 1;
+    }
+
+    LOGI("stock dex2oat fd: %d", stock_fd);
+
     close(sock_fd);
+
+    for (int i = 0; i < argc; i++) {
+        if (strncmp(argv[i], "--classpath-dir=", strlen("--classpath-dir=")) != 0) continue;
+
+        const char *app_dir = argv[i] + strlen("--classpath-dir=/data/app/~~XXXXXXXXXXXXXXXXXXXXXX==/");
+        size_t app_name_len = (size_t)(strchr(app_dir, '-') - app_dir);
+
+        LOGD("Found package id: %.*s", (int)app_name_len, app_dir);
+
+        sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (connect(sock_fd, (struct sockaddr *)&sock, len)) {
+            PLOGE("failed to connect to %s", sock.sun_path + 1);
+
+            return 1;
+        }
+
+        write_int(sock_fd, 2); /* INFO: denylist check op */
+        write_string(sock_fd, app_dir, app_name_len);
+
+        int is_in_denylist = read_int(sock_fd);
+        close(sock_fd);
+
+        if (is_in_denylist) {
+            LOGD("App %.*s is in denylist, exiting", (int)app_name_len, app_dir);
+
+            fexecve(stock_fd, (char **)argv, environ);
+
+            LOGE("fexecve failed");
+
+            close(stock_fd);
+
+            return 2;
+        }
+
+        LOGD("App %.*s is not in denylist, continuing", (int)app_name_len, app_dir);
+
+        break;
+    }
 
     sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (connect(sock_fd, (struct sockaddr *) &sock, len)) {
         PLOGE("failed to connect to %s", sock.sun_path + 1);
+
+        close(stock_fd);
+
         return 1;
     }
+
+    write_int(sock_fd, 1); /* INFO: libpreload fd retrieval op */
     write_int(sock_fd, LP_SELECT(4, 5));
+
     int preload_fd = recv_fd(sock_fd);
-    read_int(sock_fd);
-    close(sock_fd);
-
-
     if (preload_fd == -1) {
         PLOGE("failed to read libpreload.so");
+
+        close(sock_fd);
+
+        close(stock_fd);
     }
+
+    close(sock_fd);
 
     LOGD("sock path: %s, stock_fd: %d, preload_fd: %d", sock.sun_path + 1, stock_fd, preload_fd);
 
@@ -136,20 +238,16 @@ int main(int argc, char **argv) {
     for (int i = 0; i < argc; i++) new_argv[i] = argv[i];
     new_argv[argc] = nullptr;
 
-    if (getenv("LD_LIBRARY_PATH") == NULL) {
-        char const *libenv =
-                "LD_LIBRARY_PATH=/apex/com.android.art/lib64:/apex/com.android.art/lib"
-                ":/apex/com.android.os.statsd/lib64:/apex/com.android.os.statsd/lib";
-        putenv((char *)libenv);
-    }
+    char libpreload_fd_path[64];
+    snprintf(libpreload_fd_path, sizeof(libpreload_fd_path), "/proc/%d/fd/%d", getpid(), preload_fd);
 
-    int path_len = 50;
-    char env_str[path_len];
-    snprintf(env_str, path_len, "LD_PRELOAD=/proc/%d/fd/%d", getpid(), preload_fd);
-    putenv(env_str);
-    LOGD("set env %s", env_str);
+    setenv("LD_PRELOAD", libpreload_fd_path, 1);
+    LOGD("Set env LD_PRELOAD=%s", libpreload_fd_path);
 
     fexecve(stock_fd, (char **) new_argv, environ);
     PLOGE("fexecve failed");
+
+    close(stock_fd);
+
     return 2;
 }

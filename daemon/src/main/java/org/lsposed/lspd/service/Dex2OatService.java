@@ -41,9 +41,13 @@ import androidx.annotation.RequiresApi;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 @RequiresApi(Build.VERSION_CODES.Q)
 public class Dex2OatService implements Runnable {
@@ -171,6 +175,26 @@ public class Dex2OatService implements Runnable {
         selinuxObserver.onEvent(0, null);
     }
 
+    private int readInt(InputStream is) throws IOException {
+        byte[] intBytes = new byte[4];
+        int bytesRead = is.read(intBytes);
+        if (bytesRead != 4) {
+            Log.w(TAG, "Failed to read a full 4-byte integer. Read " + bytesRead + " bytes.");
+
+            return -1;
+        }
+
+        return ByteBuffer.wrap(intBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+    }
+
+    private void writeInt(OutputStream os, int val) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(4);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        buffer.putInt(val);
+
+        os.write(buffer.array());
+    }
+
     @Override
     public void run() {
         Log.i(TAG, "Dex2oat wrapper daemon start");
@@ -192,16 +216,117 @@ public class Dex2OatService implements Runnable {
         }
         try (var server = new LocalServerSocket(sockPath)) {
             setSockCreateContext(null);
+
             while (true) {
-                try (var client = server.accept();
-                     var is = client.getInputStream();
-                     var os = client.getOutputStream()) {
-                    var id = is.read();
+                var client = server.accept();
+                if (client == null) {
+                    Log.w(TAG, "Dex2oat wrapper daemon accept null client");
+                    continue;
+                }
+
+                var is = client.getInputStream();
+                if (is == null) {
+                    Log.w(TAG, "Dex2oat wrapper daemon accept client without input stream");
+                    client.close();
+                    continue;
+                }
+
+                var os = client.getOutputStream();
+                if (os == null) {
+                    Log.w(TAG, "Dex2oat wrapper daemon accept client without output stream");
+                    client.close();
+                    continue;
+                }
+
+                int op = readInt(is);
+                if (op < 0) {
+                    Log.w(TAG, "Dex2oat wrapper daemon received incomplete or invalid operation code.");
+
+                    client.close();
+
+                    continue;
+                }
+
+                if (op == 1) {
+                    /* INFO: Send libpreload.so file descriptor */
+                    int id = readInt(is);
+                    if (id < 0 || id >= dex2oatArray.length) {
+                        Log.w(TAG, "Dex2oat wrapper daemon accept client with invalid id: " + id);
+
+                        client.close();
+
+                        continue;
+                    }
+
                     var fd = new FileDescriptor[]{fdArray[id]};
                     client.setFileDescriptorsForSend(fd);
-                    os.write(1);
+
+
+                    /* INFO: When sending file descriptors, you also send a small message,
+                               for the dex2oat.cpp, it is reading a 4-byte integer, which
+                               this line below is writing. It should not be tried to read
+                               after reading the file descriptors. It is used to send the
+                               fs, after all. */
+                    writeInt(os, 1);
+
 		    Log.d(TAG, "Sent fd of " + dex2oatArray[id]);
+                } else if (op == 2) {
+                    /* INFO: Check if process is in denylist */
+                    int processNameLen = readInt(is);
+                    if (processNameLen < 0) {
+                        Log.w(TAG, "Dex2oat wrapper daemon received invalid process name length: " + processNameLen);
+
+                        client.close();
+
+                        continue;
+                    }
+
+                    Log.d(TAG, "Received process name length: " + processNameLen);
+                    if (processNameLen < 0 || processNameLen > 1024) {
+                        Log.w(TAG, "Dex2oat wrapper daemon received invalid process name length: " + processNameLen);
+
+                        client.close();
+
+                        continue;
+                    }
+
+                    byte[] processNameBytes = new byte[processNameLen];
+                    int bytesRead = is.read(processNameBytes);
+                    if (bytesRead != processNameLen) {
+                        Log.w(TAG, "Dex2oat wrapper daemon received incomplete process name. Expected: "
+                                + processNameLen + ", Read: " + bytesRead);
+
+                        client.close();
+
+                        continue;
+                    }
+
+                    String processName = new String(processNameBytes);
+                    if (processName.isEmpty() && processNameLen > 0) {
+                        Log.w(TAG, "Dex2oat wrapper daemon received empty process name despite reported length: " + processNameLen);
+
+                        client.close();
+
+                        continue;
+                    }
+
+                    Log.d(TAG, "Received process name: " + processName);
+
+                    boolean isDenied = isInDenylist(processName);
+
+                    writeInt(os, isDenied ? 1 : 0);
+
+                    Log.d(TAG, "Process " + processName + " is "
+                            + (isDenied ? "denied" : "allowed") + " for injected dex2oat");
+                } else {
+                    Log.w(TAG, "Dex2oat wrapper daemon received unknown operation: " + op);
+
+                    client.close();
+
+                    continue;
                 }
+
+                client.close();
             }
         } catch (IOException e) {
             Log.e(TAG, "Dex2oat wrapper daemon crashed", e);
@@ -222,4 +347,6 @@ public class Dex2OatService implements Runnable {
     private static native boolean setSockCreateContext(String context);
 
     private native String getSockPath();
+
+    private native boolean isInDenylist(String processName);
 }
