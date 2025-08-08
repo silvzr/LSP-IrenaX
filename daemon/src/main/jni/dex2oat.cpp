@@ -234,11 +234,8 @@ static bool magisk_get_existence() {
         break;
     }
 
-    if (path_to_magisk[0] == '\0') {
-        LOGD("No Magisk binary found, skipping Magisk root implementation detection");
-
+    if (path_to_magisk[0] == '\0')
         return false;
-    }
 
     const char *argv[] = { "magisk", "-V", NULL };
 
@@ -297,9 +294,6 @@ bool magisk_is_in_denylist(const char *const process) {
 bool apatch_get_existence() {
     struct stat s;
     if (stat("/data/adb/apd", &s) != 0) {
-        if (errno != ENOENT) {
-            LOGE("Failed to stat APatch apd binary: %s\n", strerror(errno));
-        }
         errno = 0;
 
         return false;
@@ -310,6 +304,7 @@ bool apatch_get_existence() {
 
     if (!exec_command(apatch_version, sizeof(apatch_version), "/data/adb/apd", argv)) {
         LOGE("Failed to execute apd binary: %s\n", strerror(errno));
+
         errno = 0;
 
         return false;
@@ -441,59 +436,59 @@ Java_org_lsposed_lspd_service_Dex2OatService_isInDenylist(JNIEnv *env, jobject, 
     char app_data_dir[PATH_MAX];
     snprintf(app_data_dir, sizeof(app_data_dir), "/data/data/%s", app_name);
 
-    env->ReleaseStringUTFChars(appName, app_name);
-
     struct stat st;
     if (stat(app_data_dir, &st) == -1) {
         PLOGE("Failed to stat %s", app_data_dir);
 
-        return JNI_FALSE;
-    }
-
-    uid_t app_uid = st.st_uid;
-    if (app_uid == 0) {
-        LOGE("App %s is running as root, skipping", app_name);
-
-        return JNI_FALSE;
+        goto app_not_in_denylist;
     }
 
     if (root_impl == -1 && !ksu_get_existence() && !magisk_get_existence() && !apatch_get_existence()) {
         LOGE("No supported root implementation found, skipping denylist check");
 
-        return JNI_FALSE;
+        goto app_not_in_denylist;
     }
 
     if (root_impl == 1) {
-        if (ksu_is_in_denylist(app_uid)) {
+        if (ksu_is_in_denylist(st.st_uid)) {
             LOGI("App %s is in KernelSU denylist", app_name);
 
-            return JNI_TRUE;
+            goto app_in_denylist;
         }
 
-        return JNI_FALSE;
+        goto app_not_in_denylist;
     }
 
     if (root_impl == 2) {
         if (magisk_is_in_denylist(app_name)) {
             LOGI("App %s is in Magisk denylist", app_name);
 
-            return JNI_TRUE;
+            goto app_in_denylist;
         }
 
-        return JNI_FALSE;
+        goto app_not_in_denylist;
     }
 
     if (root_impl == 3) {
         if (apatch_uid_should_umount(app_name)) {
             LOGI("App %s is in APatch denylist", app_name);
 
-            return JNI_TRUE;
+            goto app_in_denylist;
         }
 
-        return JNI_FALSE;
+        goto app_not_in_denylist;
     }
+
+    env->ReleaseStringUTFChars(appName, app_name);
 
     LOGE("No supported root implementation found, skipping denylist check");
 
-    return JNI_FALSE;
+    app_in_denylist:
+        env->ReleaseStringUTFChars(appName, app_name);
+
+        return JNI_TRUE;
+    app_not_in_denylist:
+        env->ReleaseStringUTFChars(appName, app_name);
+
+        return JNI_FALSE;
 }
