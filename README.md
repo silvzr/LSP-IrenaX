@@ -1,6 +1,6 @@
 # LSPosed Framework
 
-[![Build](https://img.shields.io/github/actions/workflow/status/re-zero001/LSPosed/core.yml?branch=master&event=push&logo=github&label=Build)](https://github.com/re-zero001/LSPosed/actions/workflows/core.yml?query=event%3Apush+branch%3Amaster+is%3Acompleted) [![Channel](https://img.shields.io/badge/Follow-Telegram-blue.svg?logo=telegram)](https://t.me/LSPosed) [![Download](https://img.shields.io/github/v/release/LSPosed/LSPosed?color=orange&logoColor=orange&label=Download&logo=DocuSign)](https://github.com/re-zero001/LSPosed/releases/latest) [![Total](https://shields.io/github/downloads/LSPosed/LSPosed/total?logo=Bookmeter&label=Counts&logoColor=yellow&color=yellow)](https://github.com/LSPosed/LSPosed/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/re-zero001/LSPosed-Irena/core.yml?branch=dev&event=push&logo=github&label=Build)](https://github.com/re-zero001/LSPosed-Irena/actions/workflows/core.yml?query=event%3Apush+branch%3Adev+is%3Acompleted) [![Channel](https://img.shields.io/badge/Follow-Telegram-blue.svg?logo=telegram)](https://t.me/lsposed-irena) [![Download](https://img.shields.io/github/v/release/LSPosed/LSPosed?color=orange&logoColor=orange&label=Download&logo=DocuSign)](https://github.com/re-zero001/LSPosed-Irena/releases/latest) [![Total](https://shields.io/github/downloads/LSPosed/LSPosed/total?logo=Bookmeter&label=Counts&logoColor=yellow&color=yellow)](https://github.com/LSPosed/LSPosed/releases)
 
 ## Introduction 
 
@@ -10,27 +10,28 @@ A Zygisk module trying to provide an ART hooking framework which delivers consis
 
 ## Supported Versions
 
-Android 8.1 ~ 15
+Android 8.1 ~ 16
 
 ## Install
 
 1. Install Magisk v26+
 2. Install [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext/releases)
-> No need enable zygisk in magisk.
+> Or enable zygisk in magisk, we recommend use ZygiskNext.
 3. [Download](#download) and install LSPosed in Magisk app
 4. Reboot
 5. Open LSPosed manager from notification
+> Or install manager.apk in zip file.
 6. Have fun :)
 
 ## Download
 
-- For stable releases, please go to [Github Releases page](https://github.com/re-zero001/LSPosed/releases)
-- For canary build, please check [Github Actions](https://github.com/re-zero001/LSPosed/actions/workflows/core.yml?query=branch%3Adev)
+- Go to telegram: [@lsposed-irena](https://t.me/s/lsposed_irena)
+- For canary build, please check [Github Actions](https://github.com/re-zero001/LSPosed-Irena/actions/workflows/core.yml?query=branch%3Adev)
 
 ## Get Help
 
 **Only bug reports from **THE LATEST DEBUG BUILD** will be accepted.**
-- GitHub issues: [Issues](https://github.com/re-zero001/LSPosed/issues/)
+- GitHub issues: [Issues](https://github.com/re-zero001/LSPosed-Irena/issues/)
 - (For Chinese speakers) 本项目只接受英语**标题**的issue。如果您不懂英语，请使用[翻译工具](https://www.deepl.com/zh/translator)
 
 ## For Developers
@@ -45,9 +46,7 @@ We use our own module repository. We welcome developers to submit modules to our
 
 ## Community Discussion
 
-- Telegram: [@LSPosed](https://t.me/s/LSPosed)
-
-Notice: These community groups don't accept any bug report, please use [Get help](#get-help) to report.
+This fork won't have.
 
 ## Credits 
 

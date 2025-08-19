@@ -214,11 +214,11 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
     }
 
     val adb: String = androidComponents.sdkComponents.adb.get().asFile.absolutePath
+    val zipFilePath = zipTask.get().archiveFile.get().asFile.absolutePath
     val pushTask = tasks.register<Exec>("push${variantCapped}", fun Exec.() {
         group = "LSPosed"
         dependsOn(zipTask)
-        workingDir("${projectDir}/release")
-        commandLine(adb, "push", zipFileName, "/data/local/tmp/")
+        commandLine(adb, "push", zipFilePath, "/data/local/tmp/")
     })
     val flashMagiskTask = tasks.register<Exec>("flashMagisk${variantCapped}", fun Exec.() {
         group = "LSPosed"
@@ -231,7 +231,7 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
     tasks.register<Exec>("flashMagiskAndReboot${variantCapped}", fun Exec.() {
         group = "LSPosed"
         dependsOn(flashMagiskTask)
-        commandLine(adb, "shell", "su", "-c", "/system/bin/svc", "power", "reboot")
+        commandLine(adb,"reboot")
     })
     val flashKsuTask = tasks.register<Exec>("flashKsu${variantCapped}", fun Exec.() {
         group = "LSPosed"

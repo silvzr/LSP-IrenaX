@@ -3,5 +3,5 @@ name=LSPosed - Irena
 version=${versionName} (${versionCode})
 versionCode=${versionCode}
 author=${authorList}
-description=Another enhanced implementation of Xposed Framework. Supports Android 8.1 ~ 15. ${requirement}.
+description=Another enhanced implementation of Xposed Framework. Supports Android 8.1 ~ 16. ${requirement}.
 updateJson=${updateJson}
