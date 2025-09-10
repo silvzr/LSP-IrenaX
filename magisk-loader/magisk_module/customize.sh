@@ -112,18 +112,26 @@ if [ "$API" -ge 29 ]; then
   if [ "$ARCH" = "arm" ] || [ "$ARCH" = "arm64" ]; then
     extract "$ZIPFILE" "bin/armeabi-v7a/dex2oat" "$MODPATH/bin" true
     mv "$MODPATH/bin/dex2oat" "$MODPATH/bin/dex2oat32"
+    extract "$ZIPFILE" "bin/armeabi-v7a/libpreload.so" "$MODPATH/bin" true
+    mv "$MODPATH/bin/libpreload.so" "$MODPATH/bin/libpreload32.so"
 
     if [ "$IS64BIT" = true ]; then
       extract "$ZIPFILE" "bin/arm64-v8a/dex2oat" "$MODPATH/bin" true
       mv "$MODPATH/bin/dex2oat" "$MODPATH/bin/dex2oat64"
+      extract "$ZIPFILE" "bin/arm64-v8a/libpreload.so" "$MODPATH/bin" true
+      mv "$MODPATH/bin/libpreload.so" "$MODPATH/bin/libpreload64.so"
     fi
   elif [ "$ARCH" == "x86" ] || [ "$ARCH" == "x64" ]; then
     extract "$ZIPFILE" "bin/x86/dex2oat" "$MODPATH/bin" true
     mv "$MODPATH/bin/dex2oat" "$MODPATH/bin/dex2oat32"
+    extract "$ZIPFILE" "bin/x86/libpreload.so" "$MODPATH/bin" true
+    mv "$MODPATH/bin/libpreload.so" "$MODPATH/bin/libpreload32.so"
 
     if [ "$IS64BIT" = true ]; then
       extract "$ZIPFILE" "bin/x86_64/dex2oat" "$MODPATH/bin" true
       mv "$MODPATH/bin/dex2oat" "$MODPATH/bin/dex2oat64"
+      extract "$ZIPFILE" "bin/x86_64/libpreload.so" "$MODPATH/bin" true
+      mv "$MODPATH/bin/libpreload.so" "$MODPATH/bin/libpreload64.so"
     fi
   fi
 
