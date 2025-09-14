@@ -143,16 +143,15 @@ public class ConfigManager {
         }
     }
 
-    private final SQLiteStatement createModulesTable = db.compileStatement("CREATE TABLE IF NOT EXISTS modules (" +
+    private static final String CREATE_MODULES_TABLE = "CREATE TABLE IF NOT EXISTS modules (" +
             "mid integer PRIMARY KEY AUTOINCREMENT," +
             "module_pkg_name text NOT NULL UNIQUE," +
             "apk_path text NOT NULL, " +
             "enabled BOOLEAN DEFAULT 0 " +
-            "CHECK (enabled IN (0, 1))," +
-            "auto_include BOOLEAN DEFAULT 0 " +
-            "CHECK (auto_include IN (0, 1))" +
-            ");");
-    private final SQLiteStatement createScopeTable = db.compileStatement("CREATE TABLE IF NOT EXISTS scope (" +
+            "CHECK (enabled IN (0, 1))" +
+            ");";
+
+    private static final String CREATE_SCOPE_TABLE = "CREATE TABLE IF NOT EXISTS scope (" +
             "mid integer," +
             "app_pkg_name text NOT NULL," +
             "user_id integer NOT NULL," +
@@ -161,8 +160,9 @@ public class ConfigManager {
             "  FOREIGN KEY (mid)" +
             "  REFERENCES modules (mid)" +
             "  ON DELETE CASCADE" +
-            ");");
-    private final SQLiteStatement createConfigTable = db.compileStatement("CREATE TABLE IF NOT EXISTS configs (" +
+            ");";
+
+    private static final String CREATE_CONFIG_TABLE = "CREATE TABLE IF NOT EXISTS configs (" +
             "module_pkg_name text NOT NULL," +
             "user_id integer NOT NULL," +
             "`group` text NOT NULL," +
@@ -173,7 +173,7 @@ public class ConfigManager {
             "  FOREIGN KEY (module_pkg_name)" +
             "  REFERENCES modules (module_pkg_name)" +
             "  ON DELETE CASCADE" +
-            ");");
+            ");";
 
     private final Map<ProcessScope, List<Module>> cachedScope = new ConcurrentHashMap<>();
 
@@ -383,74 +383,73 @@ public class ConfigManager {
     }
 
     private void initDB() {
-        try {
-            db.setForeignKeyConstraintsEnabled(true);
-            switch (db.getVersion()) {
-                case 0:
-                    executeInTransaction(() -> {
-                        createModulesTable.execute();
-                        createScopeTable.execute();
-                        createConfigTable.execute();
-                        var values = new ContentValues();
-                        values.put("module_pkg_name", "lspd");
-                        values.put("apk_path", ConfigFileManager.managerApkPath.toString());
-                        // dummy module for config
-                        db.insertWithOnConflict("modules", null, values, SQLiteDatabase.CONFLICT_IGNORE);
-                        db.setVersion(1);
-                    });
-                case 1:
-                    executeInTransaction(() -> {
-                        db.compileStatement("DROP INDEX IF EXISTS configs_idx;").execute();
-                        db.compileStatement("DROP TABLE IF EXISTS config;").execute();
-                        db.compileStatement("ALTER TABLE scope RENAME TO old_scope;").execute();
-                        db.compileStatement("ALTER TABLE configs RENAME TO old_configs;").execute();
-                        createConfigTable.execute();
-                        createScopeTable.execute();
-                        db.compileStatement("CREATE INDEX IF NOT EXISTS configs_idx ON configs (module_pkg_name, user_id);").execute();
-                        executeInTransaction(() -> {
-                            try {
-                                db.compileStatement("INSERT INTO scope SELECT * FROM old_scope;").execute();
-                            } catch (Throwable e) {
-                                Log.w(TAG, "migrate scope", e);
-                            }
-                        });
-                        executeInTransaction(() -> {
-                            try {
-                                executeInTransaction(() -> db.compileStatement("INSERT INTO configs SELECT * FROM old_configs;").execute());
-                            } catch (Throwable e) {
-                                Log.w(TAG, "migrate config", e);
-                            }
-                        });
-                        db.compileStatement("DROP TABLE old_scope;").execute();
-                        db.compileStatement("DROP TABLE old_configs;").execute();
-                        db.setVersion(2);
-                    });
-                case 2:
-                    executeInTransaction(() -> {
-                        db.compileStatement("UPDATE scope SET app_pkg_name = 'system' WHERE app_pkg_name = 'android';").execute();
-                        db.setVersion(3);
-                    });
-                case 3:
-                    try {
-                        executeInTransaction(() -> {
-                            db.compileStatement("ALTER TABLE modules ADD COLUMN auto_include BOOLEAN DEFAULT 0 CHECK (auto_include IN (0, 1));").execute();
-                            db.setVersion(4);
-                        });
-                    } catch (SQLiteException ex) {
-                        // Fix wrong init code for new column auto_include
-                        if (ex.getMessage().startsWith("duplicate column name: auto_include")) {
-                            db.setVersion(4);
-                        } else {
-                            throw ex;
-                        }
-                    }
-                default:
-                    break;
-            }
-        } catch (Throwable e) {
-            Log.e(TAG, "init db", e);
+        db.setForeignKeyConstraintsEnabled(true);
+        int oldVersion = db.getVersion();
+        if (oldVersion >= 4) {
+            // Database is already up to date.
+            return;
         }
 
+        Log.i(TAG, "Initializing/Upgrading database from version " + oldVersion + " to 4");
+        db.beginTransaction();
+        try {
+            if (oldVersion == 0) {
+                db.execSQL(CREATE_MODULES_TABLE);
+                db.execSQL(CREATE_SCOPE_TABLE);
+                db.execSQL(CREATE_CONFIG_TABLE);
+
+                var values = new ContentValues();
+                values.put("module_pkg_name", "lspd");
+                values.put("apk_path", ConfigFileManager.managerApkPath.toString());
+                db.insertWithOnConflict("modules", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+                oldVersion = 1;
+            }
+            if (oldVersion < 2) {
+                // Upgrade from 1 to 2: Recreate tables to enforce constraints and clean up.
+                db.compileStatement("DROP INDEX IF EXISTS configs_idx;").execute();
+                db.compileStatement("DROP TABLE IF EXISTS config;").execute();
+                db.compileStatement("ALTER TABLE scope RENAME TO old_scope;").execute();
+                db.compileStatement("ALTER TABLE configs RENAME TO old_configs;").execute();
+
+                db.execSQL(CREATE_SCOPE_TABLE);
+                db.execSQL(CREATE_CONFIG_TABLE);
+
+                try {
+                    db.compileStatement("INSERT INTO scope SELECT * FROM old_scope;").execute();
+                } catch (Throwable e) {
+                    Log.w(TAG, "Failed to migrate scope data", e);
+                }
+                try {
+                    db.compileStatement("INSERT INTO configs SELECT * FROM old_configs;").execute();
+                } catch (Throwable e) {
+                    Log.w(TAG, "Failed to migrate config data", e);
+                }
+
+                db.compileStatement("DROP TABLE old_scope;").execute();
+                db.compileStatement("DROP TABLE old_configs;").execute();
+                db.compileStatement("CREATE INDEX IF NOT EXISTS configs_idx ON configs (module_pkg_name, user_id);").execute();
+            }
+            if (oldVersion < 3) {
+                // Upgrade from 2 to 3: Rename 'android' scope to 'system'.
+                db.compileStatement("UPDATE scope SET app_pkg_name = 'system' WHERE app_pkg_name = 'android';").execute();
+            }
+            if (oldVersion < 4) {
+                // Upgrade from 3 to 4: Add the 'auto_include' column to the modules table.
+                try {
+                    db.compileStatement("ALTER TABLE modules ADD COLUMN auto_include BOOLEAN DEFAULT 0 CHECK (auto_include IN (0, 1));").execute();
+                } catch (SQLiteException ex) {
+                    // This might happen if the column already exists from a previous buggy run.
+                    Log.w(TAG, "Could not add auto_include column, it may already exist.", ex);
+                }
+            }
+            db.setVersion(4);
+            db.setTransactionSuccessful();
+            Log.i(TAG, "Database upgrade to version 4 successful.");
+        } catch (Throwable e) {
+            Log.e(TAG, "Failed to initialize or upgrade database, transaction rolled back.", e);
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private List<ProcessScope> getAssociatedProcesses(Application app) throws RemoteException {
