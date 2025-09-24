@@ -50,7 +50,6 @@ namespace lspd {
             int cfd = api_->connectCompanion();
             if (cfd < 0) {
                 LOGE("Failed to connect to companion: %s", strerror(errno));
-
                 return;
             }
 
@@ -65,30 +64,34 @@ namespace lspd {
                 uint32_t flags = api_->getFlags();
                 if ((flags & zygisk::PROCESS_ON_DENYLIST) == 0) goto bypass_denylist;
 
+                const char *shell_name = "com.android.shell";
+                const char *lsp_manager = "org.lsposed.manager";
                 const char *name = env_->GetStringUTFChars(args->nice_name, nullptr);
-                if (strcmp(name, "com.android.shell") == 0) {
-		    LOGD("Process is com.android.shell, bypassing denylist check");
+                if (!name) {
+                    LOGE("Failed to get process name");
 
+                    should_ignore = true;
+                    return;
+                }
+
+                bool isShell = strcmp(name, shell_name) == 0;
+                bool isLspManager = strcmp(name, lsp_manager) == 0;
+                if (isShell || isLspManager) {
+                    LOGD("Process is com.android.shell or org.lsposed.manager, bypassing denylist check");
                     env_->ReleaseStringUTFChars(args->nice_name, name);
-
                     goto bypass_denylist;
                 }
 
-                LOGE("Process %s is on denylist, cannot specialize", name);
-
+                LOGE("Process {} is on denylist, cannot specialize", name);
                 env_->ReleaseStringUTFChars(args->nice_name, name);
-
                 should_ignore = true;
-
                 return;
             } else {
                 LOGD("Injection hardening is disabled");
             }
 
             bypass_denylist:
-
-
-            MagiskLoader::GetInstance()->OnNativeForkAndSpecializePre(
+                MagiskLoader::GetInstance()->OnNativeForkAndSpecializePre(
                     env_, args->uid, args->gids, args->nice_name,
                     args->is_child_zygote ? *args->is_child_zygote : false, args->app_data_dir);
         }
@@ -96,9 +99,7 @@ namespace lspd {
         void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
             if (should_ignore) {
                 LOGD("Ignoring postAppSpecialize due to injection hardening being enabled");
-
                 api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
-
                 return;
             }
 
