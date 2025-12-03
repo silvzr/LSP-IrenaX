@@ -126,7 +126,7 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
     val magiskDir = layout.buildDirectory.dir("magisk/$variantLowered")
 
     val moduleId = "${flavorLowered}_$moduleBaseId"
-    val zipFileName = "$moduleName-v$verName-$verCode-Irena-$buildTypeLowered.zip"
+    val zipFileName = "$moduleName-v$verName-$verCode-IrenaX-$buildTypeLowered.zip"
 
     val prepareMagiskFilesTask = tasks.register<Sync>(
         "prepareMagiskFiles$variantCapped"

@@ -83,22 +83,22 @@ jobs:
         if: success()
         id: prepareArtifact
         run: |
-          zygiskReleaseName=`ls magisk-loader/release/LSPosed-v*-Irena-release.zip | awk -F '(/|.zip)' '{print $3}'` && echo "zygiskReleaseName=$zygiskReleaseName" >> $GITHUB_OUTPUT
-          zygiskDebugName=`ls magisk-loader/release/LSPosed-v*-Irena-debug.zip | awk -F '(/|.zip)' '{print $3}'` && echo "zygiskDebugName=$zygiskDebugName" >> $GITHUB_OUTPUT
-          unzip magisk-loader/release/LSPosed-v*-Irena-release.zip -d LSPosed-Irena-release
-          unzip magisk-loader/release/LSPosed-v*-Irena-debug.zip -d LSPosed-Irena-debug
+          zygiskReleaseName=`ls magisk-loader/release/LSPosed-v*-IrenaX-release.zip | awk -F '(/|.zip)' '{print $3}'` && echo "zygiskReleaseName=$zygiskReleaseName" >> $GITHUB_OUTPUT
+          zygiskDebugName=`ls magisk-loader/release/LSPosed-v*-IrenaX-debug.zip | awk -F '(/|.zip)' '{print $3}'` && echo "zygiskDebugName=$zygiskDebugName" >> $GITHUB_OUTPUT
+          unzip magisk-loader/release/LSPosed-v*-IrenaX-release.zip -d LSPosed-IrenaX-release
+          unzip magisk-loader/release/LSPosed-v*-IrenaX-debug.zip -d LSPosed-IrenaX-debug
 
       - name: Upload zygisk release
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.zygiskReleaseName }}
-          path: "./LSPosed-Irena-release/*"
+          path: "./LSPosed-IrenaX-release/*"
 
       - name: Upload zygisk debug
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.zygiskDebugName }}
-          path: "./LSPosed-Irena-debug/*"
+          path: "./LSPosed-IrenaX-debug/*"
 
       - name: Upload mappings
         uses: actions/upload-artifact@v4
