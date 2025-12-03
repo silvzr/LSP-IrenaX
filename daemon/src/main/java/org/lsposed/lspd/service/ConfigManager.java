@@ -102,6 +102,7 @@ public class ConfigManager {
     static final Path basePath = Paths.get("/data/adb/lspd");
 
     private boolean verboseLog = true;
+    private boolean modulesLog = true;
     private boolean dexObfuscate = true;
     private boolean injectionHardening = true;
     private boolean enableStatusNotification = true;
@@ -275,7 +276,10 @@ public class ConfigManager {
 
         Object bool = config.get("enable_verbose_log");
         verboseLog = bool == null || (boolean) bool;
-        
+
+        bool = config.get("enable_modules_log");
+        modulesLog = bool == null || (boolean) bool;
+
         bool = config.get("disable_injection_hardening");
         injectionHardening = bool == null || (boolean) bool;
 
@@ -1050,6 +1054,22 @@ public class ConfigManager {
 
     public boolean verboseLog() {
         return BuildConfig.DEBUG || verboseLog;
+    }
+
+    public void setModulesLog(boolean on) {
+        if (BuildConfig.DEBUG) return;
+        var logcatService = ServiceManager.getLogcatService();
+        if (on) {
+            logcatService.startModules();
+        } else {
+            logcatService.stopModules();
+        }
+        updateModulePrefs("lspd", 0, "config", "enable_modules_log", on);
+        modulesLog = on;
+    }
+
+    public boolean modulesLog() {
+        return BuildConfig.DEBUG || modulesLog;
     }
 
     public void setInjectionHardening(boolean on) {

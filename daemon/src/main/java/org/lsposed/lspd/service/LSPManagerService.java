@@ -328,6 +328,16 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     }
 
     @Override
+    public boolean isModulesLogEnabled() {
+        return ConfigManager.getInstance().modulesLog();
+    }
+
+    @Override
+    public void setModulesLogEnabled(boolean enabled) {
+        ConfigManager.getInstance().setModulesLog(enabled);
+    }
+
+    @Override
     public ParcelFileDescriptor getVerboseLog() {
         return ConfigManager.getInstance().getVerboseLog();
     }

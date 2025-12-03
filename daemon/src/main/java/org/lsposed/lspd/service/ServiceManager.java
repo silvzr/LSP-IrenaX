@@ -178,6 +178,10 @@ public class ServiceManager {
             logcatService.stopVerbose();
         }
 
+        if (!configManager.modulesLog()) {
+            logcatService.stopModules();
+        }
+
         Looper.loop();
         throw new RuntimeException("Main thread loop unexpectedly exited");
     }

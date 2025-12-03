@@ -182,6 +182,14 @@ public class LogcatService implements Runnable {
         Log.i(TAG, "!!stop_verbose!!");
     }
 
+    public void startModules() {
+        Log.i("LSPosedModuleService", "!!start_modules!!");
+    }
+
+    public void stopModules() {
+        Log.i("LSPosedModuleService", "!!stop_modules!!");
+    }
+
     public void refresh(boolean isVerboseLog) {
         if (isVerboseLog) {
             Log.i(TAG, "!!refresh_verbose!!");

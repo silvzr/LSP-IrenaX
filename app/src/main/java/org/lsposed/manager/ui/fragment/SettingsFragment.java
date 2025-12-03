@@ -155,6 +155,13 @@ public class SettingsFragment extends BaseFragment {
                 prefVerboseLogs.setOnPreferenceChangeListener((preference, newValue) -> ConfigManager.setVerboseLogEnabled(!(boolean) newValue));
             }
 
+            MaterialSwitchPreference prefModulesLogs = findPreference("disable_modules_log");
+            if (prefModulesLogs != null) {
+                prefModulesLogs.setEnabled(!BuildConfig.DEBUG && installed);
+                prefModulesLogs.setChecked(!installed || !ConfigManager.isModulesLogEnabled());
+                prefModulesLogs.setOnPreferenceChangeListener((preference, newValue) -> ConfigManager.setModulesLogEnabled(!(boolean) newValue));
+            }
+
             MaterialSwitchPreference prefInjectionHardening = findPreference("disable_injection_hardening");
             if (prefInjectionHardening != null) {
                 prefInjectionHardening.setChecked(!installed || ConfigManager.isInjectionHardeningEnabled());

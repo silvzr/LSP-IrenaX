@@ -129,6 +129,7 @@ private:
     pid_t my_pid_ = getpid();
 
     bool verbose_ = true;
+    bool modules_ = true;
 };
 
 size_t Logcat::PrintLogLine(const AndroidLogEntry &entry, FILE *out) {
@@ -188,8 +189,10 @@ inline void Logcat::Log(std::string_view str) {
         fprintf(verbose_file_.get(), "%.*s", static_cast<int>(str.size()), str.data());
         fflush(verbose_file_.get());
     }
-    fprintf(modules_file_.get(), "%.*s", static_cast<int>(str.size()), str.data());
-    fflush(modules_file_.get());
+    if (modules_) {
+        fprintf(modules_file_.get(), "%.*s", static_cast<int>(str.size()), str.data());
+        fflush(modules_file_.get());
+    }
 }
 
 void Logcat::OnCrash(int err) {
@@ -219,24 +222,28 @@ void Logcat::ProcessBuffer(struct log_msg *buf) {
     entry.tagLen--;
 
     std::string_view tag(entry.tag, entry.tagLen);
-    bool shortcut = false;
-    if (tag == "LSPosed-Bridge"sv || tag == "XSharedPreferences"sv || tag == "LSPosedContext") [[unlikely]] {
+    bool is_module_tag = tag == "LSPosed-Bridge"sv || tag == "XSharedPreferences"sv || tag == "LSPosedContext"sv || tag == "LSPosedModuleService"sv;
+    if (is_module_tag && modules_) [[unlikely]] {
         modules_print_count_ += PrintLogLine(entry, modules_file_.get());
-        shortcut = true;
     }
-    if (verbose_ && (shortcut || buf->id() == log_id::LOG_ID_CRASH ||
+    if (verbose_ && (buf->id() == log_id::LOG_ID_CRASH ||
                      entry.pid == my_pid_ || tag == "Magisk"sv || tag == "Dobby"sv ||
                      tag.starts_with("zygisk"sv) ||
-                     tag == "LSPlant"sv || tag.starts_with("LSPosed"sv))) [[unlikely]] {
+                     tag == "LSPlant"sv || (!is_module_tag && tag.starts_with("LSPosed"sv)))) [[unlikely]] {
         verbose_print_count_ += PrintLogLine(entry, verbose_file_.get());
     }
-    if (entry.pid == my_pid_ && tag == "LSPosedLogcat"sv) [[unlikely]] {
+    if (entry.pid == my_pid_ && (tag == "LSPosedLogcat"sv || tag == "LSPosedModuleService"sv)) [[unlikely]] {
         std::string_view msg(entry.message, entry.messageLen);
         if (msg == "!!start_verbose!!"sv) {
             verbose_ = true;
             verbose_print_count_ += PrintLogLine(entry, verbose_file_.get());
         } else if (msg == "!!stop_verbose!!"sv) {
             verbose_ = false;
+        } else if (msg == "!!start_modules!!"sv) {
+            modules_ = true;
+            modules_print_count_ += PrintLogLine(entry, modules_file_.get());
+        } else if (msg == "!!stop_modules!!"sv) {
+            modules_ = false;
         } else if (msg == "!!refresh_modules!!"sv) {
             RefreshFd(false);
         } else if (msg == "!!refresh_verbose!!"sv) {
