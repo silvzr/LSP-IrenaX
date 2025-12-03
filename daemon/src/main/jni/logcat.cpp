@@ -112,8 +112,6 @@ private:
 
     static size_t PrintLogLine(const AndroidLogEntry &entry, FILE *out);
 
-    void EnsureLogWatchDog();
-
     JNIEnv *env_;
     jobject thiz_;
     jmethodID refresh_fd_method_;
@@ -252,64 +250,11 @@ void Logcat::ProcessBuffer(struct log_msg *buf) {
     }
 }
 
-void Logcat::EnsureLogWatchDog() {
-    constexpr static auto kLogdSizeProp = "persist.logd.size"sv;
-    constexpr static auto kLogdTagProp = "persist.log.tag"sv;
-    constexpr static auto kLogdMainSizeProp = "persist.logd.size.main"sv;
-    constexpr static auto kLogdCrashSizeProp = "persist.logd.size.crash"sv;
-    std::thread watch_dog([this] {
-        while (true) {
-            auto logd_size = GetByteProp(kLogdSizeProp);
-            auto logd_tag = GetStrProp(kLogdTagProp);
-            auto logd_main_size = GetByteProp(kLogdMainSizeProp);
-            auto logd_crash_size = GetByteProp(kLogdCrashSizeProp);
-            bool needReset = false;
-            if (__system_property_find(kLogdSizeProp.data()) != nullptr &&
-                logd_size <= kLogBufferSize) {
-                SetIntProp(kLogdSizeProp, kLogBufferSize);
-                needReset = true;
-            }
-            if (__system_property_find(kLogdMainSizeProp.data()) != nullptr &&
-                logd_main_size <= kLogBufferSize) {
-                SetIntProp(kLogdMainSizeProp, kLogBufferSize);
-                needReset = true;
-            }
-            if (__system_property_find(kLogdCrashSizeProp.data()) != nullptr &&
-                logd_crash_size <= kLogBufferSize) {
-                SetIntProp(kLogdCrashSizeProp, kLogBufferSize);
-                needReset = true;
-            }
-            if (__system_property_find(kLogdTagProp.data()) != nullptr) {
-                SetStrProp(kLogdTagProp, "");
-                needReset = true;
-            }
-            if (needReset) {
-                SetStrProp("ctl.start", "logd-reinit");
-            }
-            const auto *pi = __system_property_find(kLogdTagProp.data());
-            uint32_t serial = 0;
-            if (pi != nullptr) {
-                __system_property_read_callback(pi, [](auto *c, auto, auto, auto s) {
-                    *reinterpret_cast<uint32_t *>(c) = s;
-                }, &serial);
-            }
-            if (!__system_property_wait(pi, serial, &serial, nullptr)) break;
-            if (pi != nullptr) Log("\nResetting log settings\n");
-            else std::this_thread::sleep_for(1s);
-            // log tag prop was not found; to avoid frequently trigger wait, sleep for a while
-        }
-    });
-    pthread_setname_np(watch_dog.native_handle(), "watchdog");
-    watch_dog.detach();
-}
-
 void Logcat::Run() {
     constexpr size_t tail_after_crash = 10U;
     size_t tail = 0;
     RefreshFd(true);
     RefreshFd(false);
-
-    EnsureLogWatchDog();
 
     while (true) {
         std::unique_ptr<logger_list, decltype(&android_logger_list_free)> logger_list{
