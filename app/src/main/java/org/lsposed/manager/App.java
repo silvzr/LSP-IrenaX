@@ -50,7 +50,6 @@ import org.lsposed.manager.repo.RepoLoader;
 import org.lsposed.manager.util.CloudflareDNS;
 import org.lsposed.manager.util.ModuleUtil;
 import org.lsposed.manager.util.ThemeUtil;
-import org.lsposed.manager.util.UpdateUtil;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -240,7 +239,6 @@ public class App extends Application {
             //TODO FIXME
         }, intentFilter, Context.RECEIVER_NOT_EXPORTED);
 
-        UpdateUtil.loadRemoteVersion();
     }
 
     @NonNull

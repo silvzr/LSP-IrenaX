@@ -45,7 +45,6 @@ import org.lsposed.manager.databinding.ActivityMainBinding;
 import org.lsposed.manager.repo.RepoLoader;
 import org.lsposed.manager.ui.activity.base.BaseActivity;
 import org.lsposed.manager.util.ModuleUtil;
-import org.lsposed.manager.util.UpdateUtil;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -245,11 +244,6 @@ public class MainActivity extends BaseActivity implements RepoLoader.RepoListene
         } else setModulesSummary(0);
         if (binding != null) {
             var nav = (NavigationBarView) binding.nav;
-            if (UpdateUtil.needUpdate()) {
-                var badge = nav.getOrCreateBadge(R.id.main_fragment);
-                badge.setVisible(true);
-            }
-
             if (!ConfigManager.isBinderAlive()) {
                 nav.getMenu().removeItem(R.id.logs_fragment);
                 nav.getMenu().removeItem(R.id.modules_nav);

@@ -127,17 +127,6 @@
             android:title="@string/settings_disable_injection_hardening" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/settings_group_repo">
-        <rikka.preference.SimpleMenuPreference
-            android:defaultValue="CHANNEL_STABLE"
-            android:entries="@array/update_channel_texts"
-            android:entryValues="@array/update_channel_values"
-            android:icon="@drawable/ic_outline_merge_type_24"
-            android:key="update_channel"
-            android:summary="%s"
-            android:title="@string/settings_update_channel" />
-    </PreferenceCategory>
-
     <PreferenceCategory android:title="@string/settings_backup_and_restore">
         <Preference
             android:icon="@drawable/ic_baseline_settings_backup_restore_24"

@@ -345,14 +345,6 @@ public class SettingsFragment extends BaseFragment {
                     translation_contributors.setSummary(translators);
                 }
             }
-            SimpleMenuPreference channel = findPreference("update_channel");
-            if (channel != null) {
-                channel.setOnPreferenceChangeListener((preference, newValue) -> {
-                    var repoLoader = RepoLoader.getInstance();
-                    repoLoader.updateLatestVersion(String.valueOf(newValue));
-                    return true;
-                });
-            }
         }
 
         @NonNull
