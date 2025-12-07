@@ -26,7 +26,7 @@
  * SUCH DAMAGE.
  */
 
-#include "cstdlib"
+#include <cstdlib>
 #include <pthread.h>
 
 namespace {
@@ -39,7 +39,6 @@ namespace {
     size_t capacity = 8;
     size_t count = 0;
     pthread_mutex_t g_atexit_mutex = PTHREAD_MUTEX_INITIALIZER;
-
     inline void atexit_lock() {
         pthread_mutex_lock(&g_atexit_mutex);
     }
@@ -84,7 +83,10 @@ namespace {
         if (count > 0) {
             size_t total = count;
             for (size_t i = count - 1;; --i) {
-                if (g_array[i].fn == nullptr) continue;
+                if (g_array[i].fn == nullptr) {
+                    if (i == 0) break;
+                    continue;
+                }
 
                 // Clear the entry in the array to avoid calling an entry again
                 // if __cxa_finalize is called recursively.
