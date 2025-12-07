@@ -24,6 +24,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sched.h>
+#include <stdlib.h>
 
 #include "logging.h"
 
