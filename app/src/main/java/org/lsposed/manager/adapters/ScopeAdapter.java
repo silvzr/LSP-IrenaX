@@ -482,7 +482,9 @@ public class ScopeAdapter extends EmptyStateRecyclerView.EmptyStateAdapter<Scope
             }
             if (system) {
                 menu.findItem(R.id.menu_force_stop).setTitle(R.string.reboot);
-                menu.removeItem(R.id.menu_compile_speed);
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
+                    menu.removeItem(R.id.menu_compile_speed);
+                }
                 menu.removeItem(R.id.menu_other_app);
                 menu.removeItem(R.id.menu_app_info);
             }

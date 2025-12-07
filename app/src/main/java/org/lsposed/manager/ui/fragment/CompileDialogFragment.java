@@ -42,6 +42,11 @@ import java.lang.ref.WeakReference;
 
 @SuppressWarnings("deprecation")
 public class CompileDialogFragment extends AppCompatDialogFragment {
+
+    private static String resolvePackageName(String packageName) {
+        return "system".equals(packageName) ? "android" : packageName;
+    }
+
     public static void speed(FragmentManager fragmentManager, ApplicationInfo info) {
         CompileDialogFragment fragment = new CompileDialogFragment();
         fragment.setCancelable(false);
@@ -68,7 +73,7 @@ public class CompileDialogFragment extends AppCompatDialogFragment {
                 .setView(binding.getRoot());
 
         var alertDialog = builder.create();
-        new CompileTask(this).executeOnExecutor(App.getExecutorService(), appInfo.packageName);
+        new CompileTask(this).executeOnExecutor(App.getExecutorService(), resolvePackageName(appInfo.packageName));
         return alertDialog;
     }
 
@@ -83,8 +88,9 @@ public class CompileDialogFragment extends AppCompatDialogFragment {
         @Override
         protected Throwable doInBackground(String... commands) {
             try {
-                LSPManagerServiceHolder.getService().clearApplicationProfileData(commands[0]);
-                if (LSPManagerServiceHolder.getService().performDexOptMode(commands[0])) {
+                String pkg = resolvePackageName(commands[0]);
+                LSPManagerServiceHolder.getService().clearApplicationProfileData(pkg);
+                if (LSPManagerServiceHolder.getService().performDexOptMode(pkg)) {
                     return null;
                 } else {
                     return new UnknownError();
