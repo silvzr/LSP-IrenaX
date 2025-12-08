@@ -452,6 +452,47 @@ bool ElfImg::findModuleBase() {
         }
     }
 
+    // Step 3 (Final Fallback): If still not found, use dl_iterate_phdr to get the base address.
+    /* TODO: Why not just use dl_iterate_phdr..? */
+    if (!found_block) {
+        LOGD("No `r-xp` block found. Falling back to dl_iterate_phdr.");
+
+        struct DlIterateData {
+            std::string target_path;
+            uintptr_t base_address = 0;
+        } data{
+            std::string(elf),
+            0
+        };
+
+        auto callback = [](struct dl_phdr_info *info, size_t, void *data_ptr) -> int {
+            auto *data = reinterpret_cast<DlIterateData *>(data_ptr);
+            if (info->dlpi_name) {
+                std::string_view name(info->dlpi_name);
+
+                if (name.find(data->target_path) != std::string_view::npos) {
+                    data->base_address = info->dlpi_addr;
+                    data->target_path = info->dlpi_name;
+
+                    return 1;
+                }
+            }
+
+            return 0;
+        };
+
+        dl_iterate_phdr(callback, &data);
+
+        if (data.base_address != 0) {
+            base = reinterpret_cast<void *>(data.base_address);
+            elf = data.target_path;
+
+            LOGD("get module base {}: {:#x} via dl_iterate_phdr", elf, data.base_address);
+
+            return true;
+        }
+    }
+
     if (!found_block) {
         LOGE("Fatal: Could not determine a base address for {}", elf.data());
         return false;
