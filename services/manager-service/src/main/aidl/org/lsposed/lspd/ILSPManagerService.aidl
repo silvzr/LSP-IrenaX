@@ -99,4 +99,8 @@ interface ILSPManagerService {
     void setInjectionHardening(boolean enable) = 51;
 
     boolean isInjectionHardeningEnabled() = 52;
+    
+    boolean isModulePrefsExist(String packageName, int userId) = 53;
+
+    boolean deleteModulePrefs(String packageName, int userId) = 54;
 }

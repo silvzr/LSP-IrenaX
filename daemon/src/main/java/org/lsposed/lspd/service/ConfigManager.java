@@ -1251,6 +1251,20 @@ public class ConfigManager {
         ConfigFileManager.deleteFolderIfExists(path);
     }
 
+    public boolean isModulePrefsExist(String packageName, int userId) {
+        return Files.exists(Paths.get(getPrefsPath(packageName, userId)));
+    }
+
+    public boolean deleteModulePrefs(String packageName, int userId) {
+        try {
+            removeModulePrefs(userId, packageName);
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to delete module prefs:", e);
+            return false;
+        }
+    }
+
     public List<String> getDenyListPackages() {
         List<String> result = new ArrayList<>();
         if(!isInjectionHardeningEnabled())

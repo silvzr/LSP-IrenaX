@@ -36,6 +36,9 @@
         android:id="@+id/menu_compile_speed"
         android:title="@string/compile_speed" />
     <item
+        android:id="@+id/menu_delete_prefs"
+        android:title="@string/delete_prefs" />
+    <item
         android:id="@+id/menu_uninstall"
         android:title="@string/module_uninstall" />
 

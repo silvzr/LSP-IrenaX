@@ -246,6 +246,25 @@ public class ConfigManager {
         }
     }
 
+    public static boolean isModulePrefsExist(String packageName, int userId) {
+        try {
+            return LSPManagerServiceHolder.getService().isModulePrefsExist(packageName, userId);
+        } catch (RemoteException e) {
+            Log.e(App.TAG, Log.getStackTraceString(e));
+            return false;
+        }
+    }
+
+    public static boolean deleteModulePrefs(String packageName, int userId) {
+        try {
+            LSPManagerServiceHolder.getService().deleteModulePrefs(packageName, userId);
+            return true;
+        } catch (RemoteException e) {
+            Log.e(App.TAG, Log.getStackTraceString(e));
+            return false;
+        }
+    }
+
     public static boolean uninstallPackage(String packageName, int userId) {
         try {
             return LSPManagerServiceHolder.getService().uninstallPackage(packageName, userId);

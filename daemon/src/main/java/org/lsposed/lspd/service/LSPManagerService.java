@@ -369,6 +369,16 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     }
 
     @Override
+    public boolean isModulePrefsExist(String packageName, int userId) throws RemoteException {
+        return ConfigManager.getInstance().isModulePrefsExist(packageName, userId);
+    }
+
+    @Override
+    public boolean deleteModulePrefs(String packageName, int userId) throws RemoteException {
+        return ConfigManager.getInstance().deleteModulePrefs(packageName, userId);
+    }
+
+    @Override
     public boolean uninstallPackage(String packageName, int userId) throws RemoteException {
         try {
             if (ActivityManagerService.startUserInBackground(userId)) {

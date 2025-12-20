@@ -321,6 +321,19 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
         } else if (itemId == R.id.menu_app_info) {
             ConfigManager.startActivityAsUserWithFeature(new Intent(ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", selectedModule.packageName, null)), selectedModule.userId);
             return true;
+        } else if (itemId == R.id.menu_delete_prefs) {
+            new BlurBehindDialogBuilder(requireActivity(), R.style.ThemeOverlay_MaterialAlertDialog_FullWidthButtons)
+                    .setIcon(selectedModule.app.loadIcon(pm))
+                    .setTitle(selectedModule.getAppName())
+                    .setMessage(R.string.module_delete_prefs_message)
+                    .setPositiveButton(android.R.string.ok, (dialog, which) ->
+                            runAsync(() -> {
+                                boolean success = ConfigManager.deleteModulePrefs(selectedModule.packageName, selectedModule.userId);
+                                String text = success ? getString(R.string.module_delete_prefs_success, selectedModule.getAppName()) : getString(R.string.module_delete_prefs_failed);
+                                showHint(text, false);
+                            }))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
         } else if (itemId == R.id.menu_uninstall) {
             new BlurBehindDialogBuilder(requireActivity(), R.style.ThemeOverlay_MaterialAlertDialog_FullWidthButtons)
                     .setIcon(selectedModule.app.loadIcon(pm))
@@ -626,6 +639,9 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
                     }
                     if (repoLoader.getOnlineModule(item.packageName) == null) {
                         menu.removeItem(R.id.menu_repo);
+                    }
+                    if (!ConfigManager.isModulePrefsExist(item.packageName, item.userId)) {
+                        menu.removeItem(R.id.menu_delete_prefs);
                     }
                     if (item.userId == 0) {
                         var users = ConfigManager.getUsers();
