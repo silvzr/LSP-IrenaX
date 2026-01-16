@@ -153,6 +153,9 @@ public class ServiceManager {
             @Override
             public void onSystemServerRestarted() {
                 Log.w(TAG, "system restarted...");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && dex2OatService != null) {
+                    dex2OatService.onSystemServerStarted();
+                }
             }
 
             @Override
@@ -170,6 +173,9 @@ public class ServiceManager {
                 Log.w(TAG, "system server died");
                 systemServerService.putBinderForSystemServer();
                 managerService.onSystemServerDied();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && dex2OatService != null) {
+                    dex2OatService.onSystemServerDied();
+                }
             }
         });
 

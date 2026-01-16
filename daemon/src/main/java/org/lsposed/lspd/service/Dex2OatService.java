@@ -63,6 +63,8 @@ public class Dex2OatService implements Runnable {
     private final FileDescriptor[] fdArray = new FileDescriptor[6];
     private final FileObserver selinuxObserver;
     private int compatibility = DEX2OAT_OK;
+    private volatile boolean running = false;
+    private Thread serverThread = null;
 
     private void openDex2oat(int id, String path) {
         try {
@@ -160,7 +162,12 @@ public class Dex2OatService implements Runnable {
         doMountNative(enabled, dex2oatArray[0], dex2oatArray[1], dex2oatArray[2], dex2oatArray[3]);
     }
 
-    public void start() {
+    public synchronized void start() {
+        if (running) {
+            Log.d(TAG, "Dex2oat service already running");
+            return;
+        }
+
         if (notMounted()) { // Already mounted when restart daemon
             doMount(true);
             if (notMounted()) {
@@ -170,11 +177,44 @@ public class Dex2OatService implements Runnable {
             }
         }
 
-        var thread = new Thread(this);
-        thread.setName("dex2oat");
-        thread.start();
+        running = true;
+        serverThread = new Thread(this);
+        serverThread.setName("dex2oat");
+        serverThread.start();
         selinuxObserver.startWatching();
         selinuxObserver.onEvent(0, null);
+    }
+
+    /**
+     * Called when system server dies - unmount the dex2oat wrapper.
+     */
+    public synchronized void onSystemServerDied() {
+        Log.i(TAG, "System server died, unmounting dex2oat wrapper");
+        if (compatibility == DEX2OAT_OK) {
+            doMount(false);
+        }
+    }
+
+    /**
+     * Called when system server starts/restarts - remount the dex2oat wrapper.
+     */
+    public synchronized void onSystemServerStarted() {
+        Log.i(TAG, "System server started, remounting dex2oat wrapper");
+        if (compatibility == DEX2OAT_CRASHED || compatibility == DEX2OAT_MOUNT_FAILED) {
+            Log.w(TAG, "Dex2oat wrapper previously failed, not remounting");
+            return;
+        }
+        if (compatibility == DEX2OAT_SELINUX_PERMISSIVE || compatibility == DEX2OAT_SEPOLICY_INCORRECT) {
+            Log.w(TAG, "SELinux issue detected, checking again...");
+            selinuxObserver.onEvent(0, null);
+            return;
+        }
+        doMount(true);
+        if (notMounted()) {
+            Log.e(TAG, "Failed to remount dex2oat wrapper");
+            doMount(false);
+            compatibility = DEX2OAT_MOUNT_FAILED;
+        }
     }
 
     private int readInt(InputStream is) throws IOException {
