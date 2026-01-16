@@ -147,11 +147,10 @@ size_t Logcat::PrintLogLine(const AndroidLogEntry &entry, FILE *out) {
         --message_len;
     }
     localtime_r(&now, &tm);
-    strftime(time_buff.data(), time_buff.size(), "%Y-%m-%dT%H:%M:%S", &tm);
-    int len = fprintf(out, "[ %s.%03ld %8d:%6d:%6d %c/%-15.*s ] %.*s\n",
+    strftime(time_buff.data(), time_buff.size(), "%H:%M:%S", &tm);
+    int len = fprintf(out, "[ %s  %d %c/%-15.*s ] %.*s\n",
                       time_buff.data(),
-                      nsec / MS_PER_NSEC,
-                      entry.uid, entry.pid, entry.tid,
+                      entry.uid,
                       kLogChar[entry.priority], static_cast<int>(entry.tagLen),
                       entry.tag, static_cast<int>(message_len), message);
     fflush(out);

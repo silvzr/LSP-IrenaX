@@ -21,6 +21,9 @@ package org.lsposed.manager.ui.fragment;
 
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -205,7 +208,14 @@ public class LogsFragment extends BaseFragment implements MenuProvider {
 
             @Override
             public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-                holder.item.setText(log.get(position));
+                CharSequence logLine = log.get(position);
+                holder.item.setText(logLine);
+                holder.item.setOnLongClickListener(v -> {
+                    ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("Log", logLine);
+                    clipboard.setPrimaryClip(clip);
+                    return true;
+                });
             }
 
             @Override
