@@ -233,17 +233,13 @@ int main(int argc, char **argv) {
 
     LOGD("sock path: %s, stock_fd: %d, preload_fd: %d", sock.sun_path + 1, stock_fd, preload_fd);
 
-    const char *new_argv[argc + 1];
-    for (int i = 0; i < argc; i++) new_argv[i] = argv[i];
-    new_argv[argc] = nullptr;
-
     char libpreload_fd_path[64];
     snprintf(libpreload_fd_path, sizeof(libpreload_fd_path), "/proc/%d/fd/%d", getpid(), preload_fd);
 
     setenv("LD_PRELOAD", libpreload_fd_path, 1);
     LOGD("Set env LD_PRELOAD=%s", libpreload_fd_path);
 
-    fexecve(stock_fd, (char **) new_argv, environ);
+    fexecve(stock_fd, (char **) argv, environ);
     PLOGE("fexecve failed");
 
     close(stock_fd);

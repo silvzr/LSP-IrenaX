@@ -2,13 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 project(dex2oat)
 
 add_executable(dex2oat dex2oat.c)
-add_library(preload SHARED preload.cpp)
-
-OPTION(LSPLT_BUILD_SHARED OFF)
-add_subdirectory(${EXTERNAL_ROOT}/lsplt/lsplt/src/main/jni external)
+add_library(preload SHARED preload.c)
 
 target_link_libraries(dex2oat log)
-target_link_libraries(preload log lsplt_static)
+target_link_libraries(preload log)
 
 if (DEFINED DEBUG_SYMBOLS_PATH)
     message(STATUS "Debug symbols will be placed at ${DEBUG_SYMBOLS_PATH}")
