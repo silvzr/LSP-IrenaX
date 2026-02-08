@@ -29,6 +29,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <limits.h>
+#include <dlfcn.h>
 
 #include "logging.h"
 
@@ -40,7 +45,8 @@
 
 #define ID_VEC(is64, is_debug) (((is64) << 1) | (is_debug))
 
-const char kSockName[] = "5291374ceda0aef7c5d86cd2a4f6a3ac\0";
+const char sock_name[] = "5291374ceda0aef7c5d86cd2a4f6a3ac\0";
+const char *linker_path = LP_SELECT("/apex/com.android.runtime/bin/linker", "/apex/com.android.runtime/bin/linker64");
 
 static ssize_t xrecvmsg(int sockfd, struct msghdr *msg, int flags) {
     int rec = recvmsg(sockfd, msg, flags);
@@ -85,6 +91,7 @@ static int recv_fd(int sockfd) {
 
     int result;
     memcpy(&result, data, sizeof(int));
+
     return result;
 }
 
@@ -126,13 +133,7 @@ static void write_string(int fd, const char *str, size_t len) {
 
 int main(int argc, char **argv) {
     LOGD("dex2oat wrapper ppid=%d, uid=%d", getppid(), getuid());
-
-    if (getenv("LD_LIBRARY_PATH") == NULL) {
-        char const *libenv = LP_SELECT(
-            "LD_LIBRARY_PATH=/apex/com.android.art/lib:/apex/com.android.os.statsd/lib",
-            "LD_LIBRARY_PATH=/apex/com.android.art/lib64:/apex/com.android.os.statsd/lib64");
-        putenv((char *)libenv);
-    }
+    unsetenv("LD_LIBRARY_PATH");
 
     int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock_fd < 0) {
@@ -145,7 +146,7 @@ int main(int argc, char **argv) {
         .sun_family = AF_UNIX,
         .sun_path = { 0 },
     };
-    strlcpy(sock.sun_path + 1, kSockName, sizeof(sock.sun_path) - 1);
+    strlcpy(sock.sun_path + 1, sock_name, sizeof(sock.sun_path) - 1);
 
     size_t len = sizeof(sa_family_t) + strlen(sock.sun_path + 1) + 1;
     sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -166,8 +167,11 @@ int main(int argc, char **argv) {
 
         return 1;
     }
+    
+    char stock_fd_path[64];
+    snprintf(stock_fd_path, sizeof(stock_fd_path), "/proc/%d/fd/%d", getpid(), stock_fd);
 
-    LOGI("stock dex2oat fd: %d", stock_fd);
+    LOGI("stock dex2oat fd: %d (%s)", stock_fd, stock_fd_path);
 
     close(sock_fd);
 
@@ -195,9 +199,15 @@ int main(int argc, char **argv) {
         if (is_in_denylist) {
             LOGD("App is in denylist, exiting");
 
-            fexecve(stock_fd, (char **)argv, environ);
+            char *new_argv[argc + 2];
+            memset(new_argv, 0, sizeof(new_argv));
 
-            LOGE("fexecve failed");
+            new_argv[0] = (char *)linker_path;
+            new_argv[1] = stock_fd_path;
+            memcpy(&new_argv[2], &argv[1], sizeof(char *) * argc);
+
+            execve(linker_path, new_argv, environ);
+            LOGE("execve failed");
 
             close(stock_fd);
 
@@ -237,10 +247,16 @@ int main(int argc, char **argv) {
     snprintf(libpreload_fd_path, sizeof(libpreload_fd_path), "/proc/%d/fd/%d", getpid(), preload_fd);
 
     setenv("LD_PRELOAD", libpreload_fd_path, 1);
-    LOGD("Set env LD_PRELOAD=%s", libpreload_fd_path);
+    char *new_argv[argc + 2];
+    memset(new_argv, 0, sizeof(new_argv));
 
-    fexecve(stock_fd, (char **) argv, environ);
-    PLOGE("fexecve failed");
+    new_argv[0] = (char *)linker_path;
+    new_argv[1] = stock_fd_path;
+    memcpy(&new_argv[2], &argv[1], sizeof(char *) * argc);
+
+    execve(linker_path, new_argv, environ);
+
+    PLOGE("execve failed");
 
     close(stock_fd);
 

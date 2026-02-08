@@ -3,4 +3,5 @@ typeattribute lsposed_file mlstrustedobject
 allow domain lsposed_file dir *
 allow domain lsposed_file file *
 allow dex2oat dex2oat_exec file execute_no_trans
+allow dex2oat system_linker_exec file execute_no_trans
 allow system_server apk_data_file file execute

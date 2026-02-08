@@ -1,3 +1,6 @@
+[submodule "external/lsplt"]
+	path = external/lsplt
+	url = https://github.com/PerformanC/LSPlt.git
 [submodule "external/lsplant"]
 	path = external/lsplant
 	url = https://github.com/re-zero001/LSPlant.git
