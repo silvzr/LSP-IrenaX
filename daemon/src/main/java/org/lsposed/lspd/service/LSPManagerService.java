@@ -569,16 +569,6 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     }
 
     @Override
-    public void setInjectionHardening(boolean enabled) {
-        ConfigManager.getInstance().setInjectionHardening(enabled);
-    }
-
-    @Override
-    public boolean isInjectionHardeningEnabled() {
-        return ConfigManager.getInstance().isInjectionHardeningEnabled();
-    }
-
-    @Override
     public boolean setAutoInclude(String packageName, boolean enabled) {
         return ConfigManager.getInstance().setAutoInclude(packageName, enabled);
     }

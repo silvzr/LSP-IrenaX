@@ -24,7 +24,8 @@
 package org.lsposed.lspd.service;
 
 public class DenylistManager {
-    native static boolean isInDenylist(String processName);
-    native static boolean isInDenylistFromClasspathDir(String classpathDir);
-    native static void clearFd();
+
+  static native boolean isInDenylist(String processName);
+
+  static native String getPkgFromClasspathArg(String classpathDir);
 }

@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#include <jni.h>
+
 #include <rapidxml.hpp>
 
 static const std::string packages_path = "/data/system/packages.xml";
@@ -112,6 +114,30 @@ extern "C" bool get_pkg_from_classpath_arg(const char* classpath_dir, char* pack
     }
     
     return false;
+}
+
+extern "C" JNIEXPORT jstring JNICALL Java_org_lsposed_lspd_service_DenylistManager_getPkgFromClasspathArg( JNIEnv *env, jclass, jstring classpathDirArg) {
+    if (classpathDirArg == NULL) {
+        LOGE("getPkgFromClasspathArg: classpathDirArg is null");
+
+        return NULL;
+    }
+
+    const char *classpath_dir = env->GetStringUTFChars(classpathDirArg, NULL);
+    if (classpath_dir == NULL) {
+        LOGE("getPkgFromClasspathArg: failed to get chars");
+
+        return NULL;
+    }
+
+    char package_name[256] = {0};
+    bool ok = get_pkg_from_classpath_arg(classpath_dir, package_name, sizeof(package_name));
+
+    env->ReleaseStringUTFChars(classpathDirArg, classpath_dir);
+
+    if (!ok) return NULL;
+
+    return env->NewStringUTF(package_name);
 }
 
 static std::vector<char> LoadFileToStdVector(std::string filename) {

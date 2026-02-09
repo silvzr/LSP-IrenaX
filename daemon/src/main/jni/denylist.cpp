@@ -21,20 +21,20 @@
            See https://github.com/PerformanC/ReZygisk repository for more details. */
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 
+#include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
-#include <jni.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
-#include <stdlib.h>
+
 #include <unistd.h>
 
-#include <string>
+#include <jni.h>
 
 #include "ksu.h"
 #include "logging.h"
-#include "packagename.h"
 
 bool exec_command(char *buf, size_t len, const char *file, const char *argv[]) {
     int link[2];
@@ -480,74 +480,6 @@ Java_org_lsposed_lspd_service_DenylistManager_isInDenylist(JNIEnv *env, jclass, 
         env->ReleaseStringUTFChars(appName, app_name);
 
         return JNI_FALSE;
-}
-
-extern "C" JNIEXPORT jboolean JNICALL
-Java_org_lsposed_lspd_service_DenylistManager_isInDenylistFromClasspathDir(JNIEnv *env, jclass, jstring classpathDirArg) {
-    const char *classpath_dir_arg = env->GetStringUTFChars(classpathDirArg, nullptr);
-
-    if (classpath_dir_arg == nullptr) {
-        LOGE("Failed to get classpathdir string");
-        return JNI_FALSE;
-    }
-
-    int app_name_len = 0;
-    char app_name[256] = { 0 };
-    app_name_len = get_pkg_from_classpath_arg(classpath_dir_arg, app_name, sizeof(app_name));
-    
-    if(app_name_len == -1)
-    {
-        LOGE("Unknown classpath dir: %s", classpath_dir_arg);
-        return JNI_FALSE;
-    }
-    env->ReleaseStringUTFChars(classpathDirArg, classpath_dir_arg);
-
-    if (root_impl == -1 && !ksu_get_existence() && !magisk_get_existence() && !apatch_get_existence()) {
-        LOGE("No supported root implementation found, skipping denylist check");
-
-        goto app_not_in_denylist;
-    }
-
-    if (root_impl == 1) {
-        struct stat st;
-        if (get_stat(app_name, &st) == -1) goto app_not_in_denylist;
-
-        if (ksu_is_in_denylist(st.st_uid)) {
-            LOGI("App %s is in KernelSU denylist", app_name);
-
-            goto app_in_denylist;
-        }
-
-        goto app_not_in_denylist;
-    }
-
-    if (root_impl == 2) {
-        if (magisk_is_in_denylist(app_name)) {
-            LOGI("App %s is in Magisk denylist", app_name);
-
-            goto app_in_denylist;
-        }
-
-        goto app_not_in_denylist;
-    }
-
-    if (root_impl == 3) {
-        if (apatch_uid_should_umount(app_name)) {
-            LOGI("App %s is in APatch denylist", app_name);
-
-            goto app_in_denylist;
-        }
-
-        goto app_not_in_denylist;
-    }
-
-    LOGE("No supported root implementation found, skipping denylist check");
-    
-    app_not_in_denylist:
-        return JNI_FALSE;
-
-    app_in_denylist:
-        return JNI_TRUE;
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -280,9 +280,6 @@ public class ConfigManager {
         bool = config.get("enable_modules_log");
         modulesLog = bool == null || (boolean) bool;
 
-        bool = config.get("disable_injection_hardening");
-        injectionHardening = bool == null || (boolean) bool;
-
         bool = config.get("enable_dex_obfuscate");
         dexObfuscate = bool == null || (boolean) bool;
 
@@ -1072,45 +1069,6 @@ public class ConfigManager {
         return BuildConfig.DEBUG || modulesLog;
     }
 
-    public void setInjectionHardening(boolean on) {
-        File configFile = new File("/data/adb/disable_injection_hardening");
-        if (on) {
-            try {
-                if(!configFile.exists()) {
-                    configFile.createNewFile();
-                }
-                Os.chmod(configFile.getAbsolutePath(), 0644);
-                Log.d(TAG, "injection hardening enabled");
-                updateModulePrefs("lspd", 0, "config", "disable_injection_hardening", on);
-                injectionHardening = on;
-            }
-            catch (Throwable e) {
-                Log.e(TAG, "failed to create config file for injection hardening", e);
-                return;
-            }   
-        } else {
-            try {
-                if(configFile.exists()) {
-                    configFile.delete();
-                }
-                Log.d(TAG, "injection hardening disabled");
-                updateModulePrefs("lspd", 0, "config", "disable_injection_hardening", on);
-                injectionHardening = on;
-            }
-            catch (Throwable e) {
-                Log.e(TAG, "failed to delete config file for injection hardening", e);
-                return;
-            }
-        }
-    }
-
-    public boolean isInjectionHardeningEnabled() {
-        File configFile = new File("/data/adb/disable_injection_hardening");
-        injectionHardening = configFile.exists();
-        updateModulePrefs("lspd", 0, "config", "disable_injection_hardening", injectionHardening);
-        return injectionHardening;
-    }
-
     public void setDexObfuscate(boolean on) {
         updateModulePrefs("lspd", 0, "config", "enable_dex_obfuscate", on);
     }
@@ -1267,21 +1225,16 @@ public class ConfigManager {
 
     public List<String> getDenyListPackages() {
         List<String> result = new ArrayList<>();
-        if(!isInjectionHardeningEnabled())
-        {
-            try
-            {
-                List<PackageInfo> infos = PackageService.getInstalledPackagesFromAllUsers(PackageService.MATCH_ALL_FLAGS, false).getList();
-                return infos.parallelStream()
-                    .filter(info -> DenylistManager.isInDenylist(info.packageName))
-                    .map(info -> info.packageName)
-                    .collect(Collectors.toList());
-            } catch (Throwable e) {
-                Log.e(TAG, "get denylist", e);
-            } finally {
-                DenylistManager.clearFd();
-            }
+        try {
+            List<PackageInfo> infos = PackageService.getInstalledPackagesFromAllUsers(PackageService.MATCH_ALL_FLAGS, false).getList();
+            return infos.parallelStream()
+                .filter(info -> DenylistManager.isInDenylist(info.packageName))
+                .map(info -> info.packageName)
+                .collect(Collectors.toList());
+        } catch (Throwable e) {
+            Log.e(TAG, "get denylist", e);
         }
+
         return result;
     }
 

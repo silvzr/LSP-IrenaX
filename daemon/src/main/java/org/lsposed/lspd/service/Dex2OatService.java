@@ -25,8 +25,6 @@ import static org.lsposed.lspd.ILSPManagerService.DEX2OAT_OK;
 import static org.lsposed.lspd.ILSPManagerService.DEX2OAT_SELINUX_PERMISSIVE;
 import static org.lsposed.lspd.ILSPManagerService.DEX2OAT_SEPOLICY_INCORRECT;
 
-import static org.lsposed.lspd.service.DenylistManager.isInDenylistFromClasspathDir;
-
 import android.net.LocalServerSocket;
 import android.os.Build;
 import android.os.FileObserver;
@@ -36,6 +34,10 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 import android.util.Log;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
+import android.system.StructStat;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -160,6 +162,59 @@ public class Dex2OatService implements Runnable {
 
     private void doMount(boolean enabled) {
         doMountNative(enabled, dex2oatArray[0], dex2oatArray[1], dex2oatArray[2], dex2oatArray[3]);
+    }
+    
+    private boolean isInDenylistFromClasspathDirJava(String classpathDirArg) {
+        // parse package using the native wrapper we added earlier
+        String pkg = DenylistManager.getPkgFromClasspathArg(classpathDirArg);
+        if (pkg == null) {
+            Log.w(TAG, "Unknown classpath dir: " + classpathDirArg);
+            return false; // match prior native behavior (JNI_FALSE)
+        }
+    
+        // ignore sandbox packages (match original C behavior)
+        if ("com.android.sdksandbox".equals(pkg) || "com.google.android.sdksandbox".equals(pkg)) {
+            return false;
+        }
+    
+        // Stat app data dir: /data/data/<pkg> or /data/user_de/0/<pkg>
+        StructStat st;
+        try {
+            try {
+                st = Os.stat("/data/data/" + pkg);
+            } catch (ErrnoException e1) {
+                st = Os.stat("/data/user_de/0/" + pkg);
+            }
+        } catch (ErrnoException e) {
+            Log.w(TAG, "Failed to stat /data/data and /data/user_de/0 for: " + pkg, e);
+            return false; // match C get_stat failure behavior
+        }
+    
+        int scopeUserId = (int) (st.st_uid / 100000);
+    
+        // Query DB via Java SQLite
+        try {
+            SQLiteDatabase db = SQLiteDatabase.openDatabase(
+                "/data/adb/lspd/config/modules_config.db",
+                null,
+                SQLiteDatabase.OPEN_READONLY
+            );
+            Cursor c = db.rawQuery(
+                "SELECT 1 FROM scope INNER JOIN modules ON scope.mid = modules.mid WHERE scope.app_pkg_name = ? AND scope.user_id = ? AND modules.enabled = 1 LIMIT 1;",
+                new String[] { pkg, String.valueOf(scopeUserId) }
+            );
+            boolean found = c.moveToFirst();
+            c.close();
+            db.close();
+    
+            // If found -> targeted by module -> NOT in denylist -> return false
+            // If not found -> NOT targeted -> in denylist -> return true
+            return !found;
+        } catch (SQLiteException e) {
+            Log.e(TAG, "Failed to open/query modules_config.db", e);
+            // Conservative: on DB error treat as in denylist (do not inject)
+            return true;
+        }
     }
 
     public synchronized void start() {
@@ -354,7 +409,7 @@ public class Dex2OatService implements Runnable {
 
                     Log.d(TAG, "Received classpath dir: " + classpathDirArg);
 
-                    boolean isDenied = isInDenylistFromClasspathDir(classpathDirArg);
+                    boolean isDenied = isInDenylistFromClasspathDirJava(classpathDirArg);
 
                     writeInt(os, isDenied ? 1 : 0);
                     Log.d(TAG, "Process is "
@@ -375,8 +430,6 @@ public class Dex2OatService implements Runnable {
                 doMount(false);
                 compatibility = DEX2OAT_CRASHED;
             }
-        } finally {
-            DenylistManager.clearFd();
         }
     }
 

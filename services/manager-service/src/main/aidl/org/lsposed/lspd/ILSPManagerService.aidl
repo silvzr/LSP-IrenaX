@@ -95,10 +95,6 @@ interface ILSPManagerService {
     boolean getAutoInclude(String packageName) = 49;
 
     boolean setAutoInclude(String packageName, boolean enable) = 50;
-
-    void setInjectionHardening(boolean enable) = 51;
-
-    boolean isInjectionHardeningEnabled() = 52;
     
     boolean isModulePrefsExist(String packageName, int userId) = 53;
 
