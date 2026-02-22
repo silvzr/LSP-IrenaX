@@ -165,6 +165,9 @@
     <!-- ModulesActivity and AppListActivity -->
     <string name="modules_other_app">View in other app</string>
     <string name="module_app_info">App info</string>
+    <string name="reset_scope_request_setting">Reset scope request setting</string>
+    <string name="scope_request_setting_reset">Scope request setting has been reset</string>
+    <string name="scope_request_setting_reset_failed">Failed to reset scope request setting</string>
     <string name="list_empty">¯\\_(ツ)_\/¯\nNothing here</string>
 
     <!-- SettingsActivity -->

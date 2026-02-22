@@ -153,6 +153,9 @@
     <!-- ModulesActivity and AppListActivity -->
     <string name="modules_other_app">在其它应用中查看</string>
     <string name="module_app_info">应用信息</string>
+    <string name="reset_scope_request_setting">重置作用域请求设置</string>
+    <string name="scope_request_setting_reset">已重置作用域请求设置</string>
+    <string name="scope_request_setting_reset_failed">重置作用域请求设置失败</string>
     <string name="list_empty">¯\\\\_(ツ)_\/¯\n空空如也</string>
     <!-- SettingsActivity -->
     <string name="settings_group_framework">框架</string>

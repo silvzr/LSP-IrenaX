@@ -99,4 +99,6 @@ interface ILSPManagerService {
     boolean isModulePrefsExist(String packageName, int userId) = 53;
 
     boolean deleteModulePrefs(String packageName, int userId) = 54;
+
+    void removeBlockedScopeRequest(String packageName) = 55;
 }

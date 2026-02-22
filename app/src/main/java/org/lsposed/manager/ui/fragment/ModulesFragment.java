@@ -358,6 +358,11 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
             return true;
         } else if (itemId == R.id.menu_compile_speed) {
             CompileDialogFragment.speed(getChildFragmentManager(), selectedModule.pkg.applicationInfo);
+            return true;
+        } else if (itemId == R.id.menu_reset_scope_request) {
+            var success = ConfigManager.removeBlockedScopeRequest(selectedModule.packageName);
+            showHint(success ? R.string.scope_request_setting_reset : R.string.scope_request_setting_reset_failed, false);
+            return true;
         }
         return super.onContextItemSelected(item);
     }
@@ -633,6 +638,9 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
                 holder.itemView.setOnCreateContextMenuListener((menu, v, menuInfo) -> {
                     requireActivity().getMenuInflater().inflate(R.menu.context_menu_modules, menu);
                     menu.setHeaderTitle(item.getAppName());
+                    if (item.legacy) {
+                        menu.removeItem(R.id.menu_reset_scope_request);
+                    }
                     Intent intent = AppHelper.getSettingsIntent(item.packageName, item.userId);
                     if (intent == null) {
                         menu.removeItem(R.id.menu_launch);
