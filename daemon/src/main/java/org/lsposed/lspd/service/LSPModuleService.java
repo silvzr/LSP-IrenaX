@@ -82,6 +82,9 @@ public class LSPModuleService extends IXposedService.Stub {
         var name = loadedModule.packageName;
         try {
             int userId = uid / PackageService.PER_USER_RANGE;
+            if (!ConfigManager.getInstance().isModuleEnabledForUser(name, userId)) {
+                return;
+            }
             var authority = name + AUTHORITY_SUFFIX;
             var provider = ActivityManagerService.getContentProvider(authority, userId);
             if (provider == null) {

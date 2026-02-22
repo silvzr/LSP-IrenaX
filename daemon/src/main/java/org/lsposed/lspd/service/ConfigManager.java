@@ -969,6 +969,14 @@ public class ConfigManager {
         }
     }
 
+    public boolean isModuleEnabledForUser(String packageName, int userId) {
+        try (Cursor cursor = db.query("modules", new String[]{"enabled"},
+                "module_pkg_name = ? AND enabled = 1",
+                new String[]{packageName}, null, null, null)) {
+            return cursor.getCount() > 0;
+        }
+    }
+
     public boolean enableModule(String packageName) throws RemoteException {
         if (packageName.equals("lspd")) return false;
         PackageInfo pkgInfo = PackageService.getPackageInfoFromAllUsers(packageName, PackageService.MATCH_ALL_FLAGS).values().stream().findFirst().orElse(null);
