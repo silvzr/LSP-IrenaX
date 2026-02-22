@@ -7,6 +7,15 @@
 -keepclasseswithmembers class org.lsposed.lspd.service.BridgeService {
     public static boolean *(android.os.IBinder, int, long, long, int);
 }
+-keepclassmembers,allowoptimization class ** implements io.github.libxposed.api.XposedInterface$Hooker {
+    public *** before(***);
+    public *** after(***);
+    public static *** before();
+    public static *** before(io.github.libxposed.api.XposedInterface$BeforeHookCallback);
+    public static void after();
+    public static void after(io.github.libxposed.api.XposedInterface$AfterHookCallback);
+    public static void after(io.github.libxposed.api.XposedInterface$AfterHookCallback, ***);
+}
 
 -assumenosideeffects class android.util.Log {
     public static *** v(...);
@@ -15,5 +24,3 @@
 -repackageclasses
 -allowaccessmodification
 -dontwarn org.slf4j.impl.StaticLoggerBinder
--dontwarn org.lsposed.lspd.core.*
--dontwarn org.lsposed.lspd.util.Hookers

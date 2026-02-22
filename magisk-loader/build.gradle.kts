@@ -105,7 +105,6 @@ abstract class Injected @Inject constructor(val magiskDir: String) {
 dependencies {
     implementation(projects.core)
     implementation(projects.hiddenapi.bridge)
-    implementation(projects.libxposed.compat)
     implementation(projects.services.managerService)
     implementation(projects.services.daemonService)
     compileOnly(libs.androidx.annotation)
