@@ -272,7 +272,7 @@ val pushDaemonNative = tasks.register<Exec>("pushDaemonNative") {
     dependsOn(":daemon:assembleDebug")
     doFirst {
         val abi: String = ByteArrayOutputStream().use { outputStream ->
-            project.providers.exec {
+            serviceOf<ExecOperations>().exec {
                 commandLine(adb, "shell", "getprop", "ro.product.cpu.abi")
                 standardOutput = outputStream
             }
@@ -297,7 +297,7 @@ val pushApk = tasks.register<Exec>("pushApk") {
     group = "LSPosed"
     dependsOn(":app:assembleDebug")
     doFirst {
-        project.providers.exec {
+        serviceOf<ExecOperations>().exec {
             commandLine(adb, "shell", "su", "-c", "rm", "-f", tmpApk)
         }
     }
