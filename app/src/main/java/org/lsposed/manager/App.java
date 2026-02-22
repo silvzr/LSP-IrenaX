@@ -20,7 +20,6 @@
 
 package org.lsposed.manager;
 
-import android.app.ActivityManager;
 import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.ContentValues;
@@ -57,7 +56,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -139,20 +137,6 @@ public class App extends Application {
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
-        var map = new HashMap<String, String>(1);
-        map.put("isParasitic", String.valueOf(isParasitic));
-        var am = getSystemService(ActivityManager.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            map.clear();
-            var reasons = am.getHistoricalProcessExitReasons(null, 0, 1);
-            if (reasons.size() == 1) {
-                map.put("description", reasons.get(0).getDescription());
-                map.put("importance", String.valueOf(reasons.get(0).getImportance()));
-                map.put("process", reasons.get(0).getProcessName());
-                map.put("reason", String.valueOf(reasons.get(0).getReason()));
-                map.put("status", String.valueOf(reasons.get(0).getStatus()));
-            }
-        }
     }
 
     private void setCrashReport() {

@@ -2,7 +2,6 @@
 agp = "8.13.0"
 kotlin = "2.2.20"
 nav = "2.9.7"
-appcenter = "5.0.6"
 glide = "5.0.5"
 okhttp = "5.3.2"
 startupRuntime = "1.2.0"

@@ -53,8 +53,6 @@ import org.lsposed.manager.util.chrome.LinkTransformationMethod;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import rikka.core.util.ClipboardUtils;
@@ -215,11 +213,6 @@ public class HomeFragment extends BaseFragment implements MenuProvider {
                 activity.getString(R.string.info_system_abi) +
                 "\n" +
                 binding.systemAbi.getText();
-        var map = new HashMap<String, String>();
-        map.put("apiVersion", binding.apiVersion.getText().toString());
-        map.put("api", binding.api.getText().toString());
-        map.put("frameworkVersion", binding.frameworkVersion.getText().toString());
-        map.put("systemAbi", Arrays.toString(Build.SUPPORTED_ABIS));
         binding.copyInfo.setOnClickListener(v -> {
             ClipboardUtils.put(activity, info);
             showHint(R.string.info_copied, false);
