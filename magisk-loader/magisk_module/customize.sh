@@ -156,11 +156,4 @@ if [ "$(grep_prop ro.maple.enable)" == "1" ]; then
   echo "ro.maple.enable=0" >> "$MODPATH/system.prop"
 fi
 
-# Remove legacy props
-resetprop -p --delete persist.logd.size
-resetprop -p --delete persist.logd.size.main
-resetprop -p --delete persist.logd.size.crash
-resetprop -p --delete persist.log.tag
-ui_print "- Remove legacy props"
-
 ui_print "- Welcome to LSPosed!"
