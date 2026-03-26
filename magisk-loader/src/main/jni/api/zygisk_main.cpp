@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
+#include <mutex>
 
 #include "zygisk.h"
 #include "logging.h"
@@ -170,94 +171,100 @@ static ssize_t read_all(int fd, void *buf, size_t count) {
     };
 } //namespace lspd
 
-/* TODO: Perhaps keep libsqlite loaded? */
+/* Load libsqlite once per companion lifetime to avoid dlopen/dlclose on every process spawn. */
+typedef struct sqlite3 sqlite3;
+typedef struct sqlite3_stmt sqlite3_stmt;
+
 static bool is_targeted_by_any_module(const char *package_name, int user_id) {
-  void *lib = dlopen("libsqlite.so", RTLD_NOW | RTLD_LOCAL);
-  if (!lib) lib = dlopen("libsqlite3.so", RTLD_NOW | RTLD_LOCAL);
+  static void *lib = nullptr;
+  static int (*sqlite3_initialize)(void) = nullptr;
+  static int (*sqlite3_open_v2)(const char *, sqlite3 **, int, const char *) = nullptr;
+  static int (*sqlite3_prepare_v2)(sqlite3 *, const char *, int, sqlite3_stmt **, const char **) = nullptr;
+  static int (*sqlite3_bind_text)(sqlite3_stmt *, int, const char *, int, void (*)(void *)) = nullptr;
+  static int (*sqlite3_bind_int)(sqlite3_stmt *, int, int) = nullptr;
+  static int (*sqlite3_step)(sqlite3_stmt *) = nullptr;
+  static int (*sqlite3_reset)(sqlite3_stmt *) = nullptr;
+  static int (*sqlite3_clear_bindings)(sqlite3_stmt *) = nullptr;
+  static int (*sqlite3_finalize)(sqlite3_stmt *) = nullptr;
+  static int (*sqlite3_close_v2)(sqlite3 *) = nullptr;
+
+  static sqlite3 *db = nullptr;
+  static sqlite3_stmt *stmt = nullptr;
+  static std::mutex sqlite_init_mutex;
+
+  // Use a single lock for both initialization and usage to ensure thread-safety of the cached handle
+  std::lock_guard<std::mutex> lock(sqlite_init_mutex);
+
   if (!lib) {
-    LOGE("Failed to dlopen sqlite: {}", dlerror());
+    lib = dlopen("libsqlite.so", RTLD_NOW | RTLD_LOCAL);
+    if (!lib) lib = dlopen("libsqlite3.so", RTLD_NOW | RTLD_LOCAL);
+    if (!lib) {
+      LOGE("Failed to dlopen sqlite: %s", dlerror());
 
-    return false;
+      return false;
+    }
+
+    sqlite3_initialize     = reinterpret_cast<decltype(sqlite3_initialize)> (dlsym(lib, "sqlite3_initialize"));
+    sqlite3_open_v2        = reinterpret_cast<decltype(sqlite3_open_v2)> (dlsym(lib, "sqlite3_open_v2"));
+    sqlite3_prepare_v2     = reinterpret_cast<decltype(sqlite3_prepare_v2)> (dlsym(lib, "sqlite3_prepare_v2"));
+    sqlite3_bind_text      = reinterpret_cast<decltype(sqlite3_bind_text)> (dlsym(lib, "sqlite3_bind_text"));
+    sqlite3_bind_int       = reinterpret_cast<decltype(sqlite3_bind_int)> (dlsym(lib, "sqlite3_bind_int"));
+    sqlite3_step           = reinterpret_cast<decltype(sqlite3_step)> (dlsym(lib, "sqlite3_step"));
+    sqlite3_reset          = reinterpret_cast<decltype(sqlite3_reset)> (dlsym(lib, "sqlite3_reset"));
+    sqlite3_clear_bindings = reinterpret_cast<decltype(sqlite3_clear_bindings)> (dlsym(lib, "sqlite3_clear_bindings"));
+    sqlite3_finalize       = reinterpret_cast<decltype(sqlite3_finalize)> (dlsym(lib, "sqlite3_finalize"));
+    sqlite3_close_v2       = reinterpret_cast<decltype(sqlite3_close_v2)> (dlsym(lib, "sqlite3_close_v2"));
+
+    if (!sqlite3_open_v2 || !sqlite3_prepare_v2 || !sqlite3_bind_text || !sqlite3_bind_int || !sqlite3_step || !sqlite3_finalize || !sqlite3_close_v2 || !sqlite3_reset || !sqlite3_clear_bindings) {
+      LOGE("Missing sqlite symbols");
+
+      dlclose(lib);
+
+      lib = nullptr; // Reset to allow retry if needed
+      return false;
+    }
+
+    // Explicitly initialize SQLite internals while holding the global lock
+    if (sqlite3_initialize) {
+      sqlite3_initialize();
+    }
   }
 
-  typedef struct sqlite3 sqlite3;
-  typedef struct sqlite3_stmt sqlite3_stmt;
+  if (!db) {
+    const char *db_path = "/data/adb/lspd/config/modules_config.db";
+    if (sqlite3_open_v2(db_path, &db, 1, nullptr) != 0 || !db) {
+      LOGE("Failed to open sqlite db: {}", db_path);
 
-  int (*sqlite3_open)(const char *, sqlite3 **) = (int (*)(const char *, sqlite3 **))dlsym(lib, "sqlite3_open");
-  int (*sqlite3_prepare_v2)(sqlite3 *, const char *, int, sqlite3_stmt **, const char **) = (int (*)(sqlite3 *, const char *, int, sqlite3_stmt **, const char **))dlsym(lib, "sqlite3_prepare_v2");
-  int (*sqlite3_bind_text)(sqlite3_stmt *, int, const char *, int, void (*)(void *)) = (int (*)(sqlite3_stmt *, int, const char *, int, void (*)(void *)))dlsym(lib, "sqlite3_bind_text");
-  int (*sqlite3_bind_int)(sqlite3_stmt *, int, int) = (int (*)(sqlite3_stmt *, int, int))dlsym(lib, "sqlite3_bind_int");
-  int (*sqlite3_step)(sqlite3_stmt *) = (int (*)(sqlite3_stmt *))dlsym(lib, "sqlite3_step");
-  int (*sqlite3_finalize)(sqlite3_stmt *) = (int (*)(sqlite3_stmt *))dlsym(lib, "sqlite3_finalize");
-  int (*sqlite3_close)(sqlite3 *) = (int (*)(sqlite3 *))dlsym(lib, "sqlite3_close");
-
-  if (!sqlite3_open || !sqlite3_prepare_v2 || !sqlite3_bind_text || !sqlite3_bind_int || !sqlite3_step || !sqlite3_finalize || !sqlite3_close) {
-    LOGE("Missing sqlite symbols");
-
-    dlclose(lib);
-
-    return false;
+      if (db) {
+        sqlite3_close_v2(db);
+        db = nullptr;
+      }
+      return false;
+    }
   }
 
-  sqlite3 *db = NULL;
-  const char *db_path = "/data/adb/lspd/config/modules_config.db";
-  if (sqlite3_open(db_path, &db) != 0 || db == NULL) {
-    LOGE("Failed to open sqlite db: {}", db_path);
-
-    if (db) sqlite3_close(db);
-
-    dlclose(lib);
-
-    return false;
+  if (!stmt) {
+    const char *sql = "SELECT 1 FROM scope INNER JOIN modules ON scope.mid = modules.mid WHERE scope.app_pkg_name = ? AND scope.user_id = ? AND modules.enabled = 1 LIMIT 1;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != 0) {
+      LOGE("Failed to prepare sqlite statement");
+      return false;
+    }
   }
 
-  const char *sql = "SELECT 1 FROM scope INNER JOIN modules ON scope.mid = modules.mid WHERE scope.app_pkg_name = ? AND scope.user_id = ? AND modules.enabled = 1 LIMIT 1;";
-  sqlite3_stmt *stmt = NULL;
-  if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != 0) {
-    LOGE("Failed to prepare sqlite statement");
+  sqlite3_reset(stmt);
+  sqlite3_clear_bindings(stmt);
 
-    if (db) sqlite3_close(db);
+  bool is_targeted = false;
 
-    dlclose(lib);
-
-    return false;
-  }
-
-  if (sqlite3_bind_text(stmt, 1, package_name, (int)strlen(package_name), NULL) != 0) {
+  if (sqlite3_bind_text(stmt, 1, package_name, static_cast<int>(strlen(package_name)), nullptr) != 0) {
     LOGE("Failed to bind package name");
-    
-    if (stmt) sqlite3_finalize(stmt);
-    if (db) sqlite3_close(db);
-
-    dlclose(lib);
-
-    return false;
-  }
-  
-  if (sqlite3_bind_int(stmt, 2, user_id) != 0) {
+  } else if (sqlite3_bind_int(stmt, 2, user_id) != 0) {
     LOGE("Failed to bind user id");
-    
-    if (stmt) sqlite3_finalize(stmt);
-    if (db) sqlite3_close(db);
-
-    dlclose(lib);
-
-    return false;
+  } else {
+    is_targeted = (sqlite3_step(stmt) == 100); // SQLITE_ROW
   }
 
-  if (sqlite3_step(stmt) == 100) {
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
-    dlclose(lib);
-
-    return true;
-  }
-
-  sqlite3_finalize(stmt);
-  sqlite3_close(db);
-  dlclose(lib);
-
-  return false;
+  return is_targeted;
 }
 
 void relsposed_companion(int lib_fd) {
@@ -286,7 +293,7 @@ void relsposed_companion(int lib_fd) {
     CLEAN_EXIT();
   }
 
-  if (name_len < 0 || name_len > 4096) {
+  if (name_len == 0 || name_len > 4096) {
     LOGE("Invalid name length: %u", name_len);
 
     CLEAN_EXIT();
