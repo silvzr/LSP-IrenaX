@@ -66,6 +66,7 @@ dependencies {
     implementation(projects.libxposed.compat)
     implementation(projects.services.daemonService)
     implementation(projects.services.managerService)
+    implementation(libs.hiddenapibypass)
     compileOnly(libs.androidx.annotation)
     compileOnly(projects.hiddenapi.stubs)
 }

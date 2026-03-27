@@ -27,8 +27,10 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Environment;
 import android.preference.PreferenceManager;
+import android.util.Xml;
 
 import com.android.internal.util.XmlUtils;
+import com.android.modules.utils.TypedXmlPullParser;
 
 import org.lsposed.lspd.core.BuildConfig;
 import org.lsposed.lspd.util.MetaDataReader;
@@ -39,6 +41,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Path;
@@ -336,7 +340,7 @@ public final class XSharedPreferences implements SharedPreferences {
         try {
             result = SELinuxHelper.getAppDataFileService().getFileInputStream(mFilename, mFileSize, mLastModified);
             if (result.stream != null) {
-                map = XmlUtils.readMapXml(result.stream);
+                map = readMapXml(result.stream);
                 result.stream.close();
             } else {
                 // The file is unchanged, keep the current values
@@ -368,6 +372,24 @@ public final class XSharedPreferences implements SharedPreferences {
             mMap = new HashMap<>();
         }
         notifyAll();
+    }
+
+    @SuppressLint("BlockedPrivateApi")
+    @SuppressWarnings("rawtypes")
+    private Map readMapXml(InputStream in) throws XmlPullParserException, IOException {
+        try {
+            return XmlUtils.readMapXml(in);
+        } catch (NoSuchMethodError ignore) {
+            try {
+                Method newFastPullParser = Xml.class.getDeclaredMethod("newFastPullParser");
+                newFastPullParser.setAccessible(true);
+                TypedXmlPullParser parser = (TypedXmlPullParser) newFastPullParser.invoke(null);
+                parser.setInput(in, StandardCharsets.UTF_8.name());
+                return (Map) XmlUtils.readValueXml(parser, new String[1]);
+            } catch (Throwable e) {
+                throw new IOException(e);
+            }
+        }
     }
 
     /**
