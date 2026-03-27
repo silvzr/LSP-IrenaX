@@ -55,6 +55,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -149,7 +150,13 @@ public class PackageService {
             // in case pkginfo of other users in primary user
             ParceledListSlice<PackageInfo> infos;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                infos = pm.getInstalledPackages((long) flags, user.id);
+                try {
+                    Method method = IPackageManager.class.getDeclaredMethod("getInstalledPackages", long.class, int.class);
+                    method.setAccessible(true);
+                    infos = (ParceledListSlice<PackageInfo>) method.invoke(pm, (long) flags, user.id);
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
             } else {
                 infos = pm.getInstalledPackages(flags, user.id);
             }
