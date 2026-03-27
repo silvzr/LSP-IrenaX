@@ -381,7 +381,7 @@ public final class XSharedPreferences implements SharedPreferences {
             return XmlUtils.readMapXml(in);
         } catch (NoSuchMethodError ignore) {
             try {
-                Method newFastPullParser = Xml.class.getMethod("newFastPullParser");
+                Method newFastPullParser = Xml.class.getDeclaredMethod("newFastPullParser");
                 newFastPullParser.setAccessible(true);
                 TypedXmlPullParser parser = (TypedXmlPullParser) newFastPullParser.invoke(null);
                 parser.setInput(in, StandardCharsets.UTF_8.name());

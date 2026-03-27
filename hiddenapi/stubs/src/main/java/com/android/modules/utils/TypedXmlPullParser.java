@@ -1,6 +1,5 @@
 package com.android.modules.utils;
 
-import org.xmlpull.v1.XmlPullParser;
-
-public class TypedXmlPullParser extends XmlPullParser {
+public interface TypedXmlPullParser {
+    void setInput(java.io.InputStream inputStream, String inputEncoding) throws org.xmlpull.v1.XmlPullParserException;
 }
