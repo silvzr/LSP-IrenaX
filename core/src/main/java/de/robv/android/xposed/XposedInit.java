@@ -40,7 +40,6 @@ import android.os.IBinder;
 import android.os.Process;
 import android.util.ArrayMap;
 
-import org.lsposed.hiddenapibypass.LSPass;
 import org.lsposed.lspd.impl.LSPosedContext;
 import org.lsposed.lspd.models.PreLoadedApk;
 import org.lsposed.lspd.nativebridge.NativeAPI;
@@ -73,10 +72,6 @@ public final class XposedInit {
     public static void hookResources() throws Throwable {
         if (disableResources || !resourceInit.compareAndSet(false, true)) {
             return;
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            LSPass.setHiddenApiExemptions("L");
         }
 
         deoptResourceMethods();
