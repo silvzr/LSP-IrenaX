@@ -3,7 +3,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
-#include <lsplt.h>
+#include <plti.h>
 
 #include "logging.h"
 
@@ -41,41 +41,18 @@ void _ZN3art15CompilerOptionsC1Ev(void *self) {
 
 __attribute__((constructor))
 static void oat_hook_init(void) {
-   struct lsplt_map_info *maps = lsplt_scan_maps("self");
-   if (!maps) {
-    LOGE("Failed to scan maps");
+  struct plti ctx;
+  plti_init(&ctx);
 
-    return;
-   }
-   
-   dev_t dev = 0;
-   ino_t inode = 0;
-   
-   for (size_t i = 0; i < maps->length; i++) {
-     struct lsplt_map_entry *map = &maps->maps[i];
-     if (!map->path || !strstr(map->path, "bin/dex2oat")) continue;
-     
-     dev = map->dev;
-     inode = map->inode;
-     
-     LOGD("Found target: %s (dev: %ju, inode: %ju)", map->path, (uintmax_t)dev, (uintmax_t)inode);
-     
-     break;
-   }
-   
-   if (!dev || !inode) {
-     LOGE("Failed to find dex2oat memory map");
+  #ifdef __aarch64__
+    plti_add_lib(&ctx, "/apex/com.android.art/bin/dex2oat64");
+  #else
+    plti_add_lib(&ctx, "/apex/com.android.art/bin/dex2oat");
+  #endif
 
-     lsplt_free_maps(maps);
+  plti_add_hook(&ctx, "dex2oat", "_ZN3art15CompilerOptionsC1Ev", _ZN3art15CompilerOptionsC1Ev, NULL);
 
-     return;
-   }
-   
-   lsplt_register_hook(dev, inode, "_ZN3art15CompilerOptionsC1Ev", _ZN3art15CompilerOptionsC1Ev, NULL);
-   
-   if (!lsplt_commit_hook()) {
-     LOGE("Failed to commit hook");
-   }
-   
-   LOGD("Hook registered successfully");
+  plti_deinit(&ctx);
+
+  LOGD("Hook registered successfully");
 }
