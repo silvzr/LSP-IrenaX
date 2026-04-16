@@ -363,6 +363,29 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
             var success = ConfigManager.removeBlockedScopeRequest(selectedModule.packageName);
             showHint(success ? R.string.scope_request_setting_reset : R.string.scope_request_setting_reset_failed, false);
             return true;
+        } else if (itemId == R.id.menu_ignore_this_update) {
+            var ver = repoLoader.getModuleLatestVersion(selectedModule.packageName);
+            if (ver != null) {
+                App.getPreferences().edit().putBoolean("ignore_update_" + selectedModule.packageName + "_" + ver.versionCode, true).apply();
+                forEachAdaptor(ModuleAdapter::refresh);
+                repoLoader.notifyListeners();
+            }
+            return true;
+        } else if (itemId == R.id.menu_ignore_all_updates) {
+            App.getPreferences().edit().putBoolean("ignore_all_updates_" + selectedModule.packageName, true).apply();
+            forEachAdaptor(ModuleAdapter::refresh);
+            repoLoader.notifyListeners();
+            return true;
+        } else if (itemId == R.id.menu_reset_ignored_updates) {
+            var edit = App.getPreferences().edit();
+            edit.remove("ignore_all_updates_" + selectedModule.packageName);
+            App.getPreferences().getAll().keySet().stream()
+                    .filter(key -> key.startsWith("ignore_update_" + selectedModule.packageName + "_"))
+                    .forEach(edit::remove);
+            edit.apply();
+            forEachAdaptor(ModuleAdapter::refresh);
+            repoLoader.notifyListeners();
+            return true;
         }
         return super.onContextItemSelected(item);
     }
@@ -601,7 +624,8 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
                 sb.setSpan(foregroundColorSpan, sb.length() - warningText.length(), sb.length(), Spannable.SPAN_INCLUSIVE_INCLUSIVE);
             }
             var ver = repoLoader.getModuleLatestVersion(item.packageName);
-            if (ver != null && ver.upgradable(item.versionCode, item.versionName)) {
+            boolean ignoreUpdate = RepoLoader.isUpdateIgnored(item.packageName, ver);
+            if (ver != null && ver.upgradable(item.versionCode, item.versionName) && !ignoreUpdate) {
                 if (warningText != null) sb.append("\n");
                 String recommended = getString(R.string.update_available, ver.versionName);
                 sb.append(recommended);
@@ -645,8 +669,26 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
                     if (intent == null) {
                         menu.removeItem(R.id.menu_launch);
                     }
+                    var latestVer = repoLoader.getModuleLatestVersion(item.packageName);
                     if (repoLoader.getOnlineModule(item.packageName) == null) {
                         menu.removeItem(R.id.menu_repo);
+                        menu.removeItem(R.id.menu_ignore_this_update);
+                        menu.removeItem(R.id.menu_ignore_all_updates);
+                    } else {
+                        if (latestVer == null || !latestVer.upgradable(item.versionCode, item.versionName)) {
+                            menu.removeItem(R.id.menu_ignore_this_update);
+                        } else if (App.getPreferences().getBoolean("ignore_update_" + item.packageName + "_" + latestVer.versionCode, false)) {
+                            menu.removeItem(R.id.menu_ignore_this_update);
+                        }
+                        if (App.getPreferences().getBoolean("ignore_all_updates_" + item.packageName, false)) {
+                            menu.removeItem(R.id.menu_ignore_all_updates);
+                        }
+                    }
+
+                    boolean hasIgnored = App.getPreferences().getBoolean("ignore_all_updates_" + item.packageName, false) ||
+                            App.getPreferences().getAll().keySet().stream().anyMatch(key -> key.startsWith("ignore_update_" + item.packageName + "_"));
+                    if (!hasIgnored) {
+                        menu.removeItem(R.id.menu_reset_ignored_updates);
                     }
                     if (!ConfigManager.isModulePrefsExist(item.packageName, item.userId)) {
                         menu.removeItem(R.id.menu_delete_prefs);

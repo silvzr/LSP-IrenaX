@@ -44,5 +44,14 @@
     <item
         android:id="@+id/menu_reset_scope_request"
         android:title="@string/reset_scope_request_setting" />
+    <item
+        android:id="@+id/menu_ignore_this_update"
+        android:title="@string/ignore_this_update" />
+    <item
+        android:id="@+id/menu_ignore_all_updates"
+        android:title="@string/ignore_all_updates" />
+    <item
+        android:id="@+id/menu_reset_ignored_updates"
+        android:title="@string/reset_ignored_updates" />
 
 </menu>
