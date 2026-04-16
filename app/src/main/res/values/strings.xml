@@ -114,6 +114,9 @@
     <string name="module_install_failed">Adding module failed</string>
     <string name="install_to_user">Install to user %s</string>
     <string name="install_to_user_message">Want to install %1$s to user %2$s? It is recommended to install manually, forcing installation via LSPosed may cause problems.</string>
+    <string name="ignore_this_update">Ignore this update</string>
+    <string name="ignore_all_updates">Ignore all updates</string>
+    <string name="reset_ignored_updates">Reset ignored updates</string>
     <string name="expand">expand</string>
     <string name="collapse">collapse</string>
 

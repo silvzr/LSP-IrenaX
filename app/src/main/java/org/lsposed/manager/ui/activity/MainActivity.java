@@ -200,7 +200,7 @@ public class MainActivity extends BaseActivity implements RepoLoader.RepoListene
         modules.forEach((k, v) -> {
                     if (!processedModules.contains(k.first)) {
                         var ver = repoLoader.getModuleLatestVersion(k.first);
-                        if (ver != null && ver.upgradable(v.versionCode, v.versionName)) {
+                        if (ver != null && ver.upgradable(v.versionCode, v.versionName) && !RepoLoader.isUpdateIgnored(k.first, ver)) {
                             ++count[0];
                         }
                         processedModules.add(k.first);

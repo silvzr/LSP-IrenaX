@@ -150,7 +150,7 @@ public class RepoFragment extends BaseFragment implements RepoLoader.RepoListene
             modules.forEach((k, v) -> {
                         if (!processedModules.contains(k.first)) {
                             var ver = repoLoader.getModuleLatestVersion(k.first);
-                            if (ver != null && ver.upgradable(v.versionCode, v.versionName)) {
+                            if (ver != null && ver.upgradable(v.versionCode, v.versionName) && !RepoLoader.isUpdateIgnored(k.first, ver)) {
                                 ++count[0];
                             }
                             processedModules.add(k.first);
@@ -225,6 +225,7 @@ public class RepoFragment extends BaseFragment implements RepoLoader.RepoListene
             mHandler.postDelayed(() -> new WebView(requireContext()), 500);
             preLoadWebview = false;
         }
+        updateRepoSummary();
     }
 
     @Override

@@ -299,6 +299,19 @@ public class RepoLoader {
         listeners.remove(listener);
     }
 
+    public void notifyListeners() {
+        for (RepoListener listener : listeners) {
+            listener.onRepoLoaded();
+        }
+    }
+
+    public static boolean isUpdateIgnored(String packageName, ModuleVersion ver) {
+        if (App.getPreferences().getBoolean("ignore_all_updates_" + packageName, false)) {
+            return true;
+        }
+        return ver != null && App.getPreferences().getBoolean("ignore_update_" + packageName + "_" + ver.versionCode, false);
+    }
+
     @Nullable
     public OnlineModule getOnlineModule(String packageName) {
         return repoLoaded && packageName != null ? onlineModules.get(packageName) : null;

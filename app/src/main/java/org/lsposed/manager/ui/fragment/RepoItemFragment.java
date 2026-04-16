@@ -164,6 +164,10 @@ public class RepoItemFragment extends BaseFragment implements RepoLoader.RepoLis
         }
     }
 
+    private boolean isUpdateIgnored(String packageName, RepoLoader.ModuleVersion ver) {
+        return RepoLoader.isUpdateIgnored(packageName, ver);
+    }
+
     private void renderGithubMarkdown(WebView view, @Nullable String text) {
         try {
             view.setBackgroundColor(Color.TRANSPARENT);
