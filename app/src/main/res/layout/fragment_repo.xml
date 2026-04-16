@@ -57,30 +57,20 @@
                 app:layout_collapseMode="pin" />
         </com.google.android.material.appbar.SubtitleCollapsingToolbarLayout>
 
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tab_layout"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/tab_layout_height"
+            android:layout_gravity="bottom"
+            android:background="@android:color/transparent"
+            app:tabGravity="center"
+            app:tabIndicatorAnimationMode="elastic"
+            app:tabMode="scrollable" />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <FrameLayout
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/view_pager"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
-
-        <org.lsposed.manager.ui.widget.MaterialSwipeRefreshLayout
-            android:id="@+id/swipe_refresh_layout"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
-
-            <org.lsposed.manager.ui.widget.EmptyStateRecyclerView
-                android:id="@+id/recycler_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:fadeScrollbars="true"
-                android:scrollbarStyle="insideOverlay"
-                android:scrollbars="vertical"
-                app:borderBottomVisibility="never"
-                app:borderTopDrawable="@null"
-                app:borderTopVisibility="whenTop"
-                app:fitsSystemWindowsInsets="@integer/internal_fragment_bottom_insets" />
-        </org.lsposed.manager.ui.widget.MaterialSwipeRefreshLayout>
-    </FrameLayout>
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
