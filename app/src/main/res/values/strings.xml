@@ -229,6 +229,9 @@
         <item quantity="one">%d download</item>
         <item quantity="other">%d downloads</item>
     </plurals>
+    <string name="downloading">Downloading…</string>
+    <string name="download_failed">Download failed: %s</string>
+    <string name="downloaded_to">Downloaded to %s</string>
 
     <!-- Colors -->
     <string name="color_sakura">Sakura</string>

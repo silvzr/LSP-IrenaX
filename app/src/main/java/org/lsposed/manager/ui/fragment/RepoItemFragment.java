@@ -80,6 +80,7 @@ import org.lsposed.manager.ui.dialog.BlurBehindDialogBuilder;
 import org.lsposed.manager.ui.widget.EmptyStateRecyclerView;
 import org.lsposed.manager.ui.widget.LinkifyTextView;
 import org.lsposed.manager.util.AccessibilityUtils;
+import org.lsposed.manager.util.DownloadUtil;
 import org.lsposed.manager.util.NavUtil;
 import org.lsposed.manager.util.SimpleStatefulAdaptor;
 import org.lsposed.manager.util.chrome.CustomTabsURLSpan;
@@ -380,7 +381,7 @@ public class RepoItemFragment extends BaseFragment implements RepoLoader.RepoLis
                     .setTitle(R.string.module_release_view_assets)
                     .setPositiveButton(android.R.string.cancel, null)
                     .setAdapter(new ArrayAdapter<>(requireActivity(), R.layout.dialog_item, args.getCharSequenceArray("names")),
-                            (dialog, which) -> NavUtil.startURL(requireActivity(), args.getStringArrayList("urls").get(which)))
+                            (dialog, which) -> DownloadUtil.download(requireActivity(), args.getStringArrayList("urls").get(which), args.getStringArrayList("filenames").get(which)))
                     .create();
         }
 
@@ -389,11 +390,14 @@ public class RepoItemFragment extends BaseFragment implements RepoLoader.RepoLis
             var bundle = new Bundle();
 
             var displayNames = new CharSequence[assets.size()];
+            var filenames = new ArrayList<String>();
             for (int i = 0; i < assets.size(); i++) {
-                var sb = new SpannableStringBuilder(assets.get(i).getName());
-                var count = assets.get(i).getDownloadCount();
+                var asset = assets.get(i);
+                filenames.add(asset.getName());
+                var sb = new SpannableStringBuilder(asset.getName());
+                var count = asset.getDownloadCount();
                 var countStr = activity.getResources().getQuantityString(R.plurals.module_release_assets_download_count, count, count);
-                var sizeStr = Formatter.formatShortFileSize(activity, assets.get(i).getSize());
+                var sizeStr = Formatter.formatShortFileSize(activity, asset.getSize());
                 sb.append('\n').append(sizeStr).append('/').append(countStr);
                 final ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(ResourceUtils.resolveColor(activity.getTheme(), android.R.attr.textColorSecondary));
                 final RelativeSizeSpan relativeSizeSpan = new RelativeSizeSpan(0.8f);
@@ -403,6 +407,7 @@ public class RepoItemFragment extends BaseFragment implements RepoLoader.RepoLis
             }
             bundle.putCharSequenceArray("names", displayNames);
             bundle.putStringArrayList("urls", assets.stream().map(ReleaseAsset::getDownloadUrl).collect(Collectors.toCollection(ArrayList::new)));
+            bundle.putStringArrayList("filenames", filenames);
             f.setArguments(bundle);
             f.show(fm, "download");
         }
