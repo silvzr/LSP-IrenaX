@@ -1170,7 +1170,9 @@ public final class XposedHelpers {
      */
     public static void setStaticObjectField(Class<?> clazz, String fieldName, Object value) {
         try {
-            findField(clazz, fieldName).set(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.set(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1185,7 +1187,9 @@ public final class XposedHelpers {
      */
     public static void setStaticBooleanField(Class<?> clazz, String fieldName, boolean value) {
         try {
-            findField(clazz, fieldName).setBoolean(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setBoolean(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1200,7 +1204,9 @@ public final class XposedHelpers {
      */
     public static void setStaticByteField(Class<?> clazz, String fieldName, byte value) {
         try {
-            findField(clazz, fieldName).setByte(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setByte(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1215,7 +1221,9 @@ public final class XposedHelpers {
      */
     public static void setStaticCharField(Class<?> clazz, String fieldName, char value) {
         try {
-            findField(clazz, fieldName).setChar(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setChar(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1230,7 +1238,9 @@ public final class XposedHelpers {
      */
     public static void setStaticDoubleField(Class<?> clazz, String fieldName, double value) {
         try {
-            findField(clazz, fieldName).setDouble(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setDouble(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1245,7 +1255,9 @@ public final class XposedHelpers {
      */
     public static void setStaticFloatField(Class<?> clazz, String fieldName, float value) {
         try {
-            findField(clazz, fieldName).setFloat(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setFloat(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1260,7 +1272,9 @@ public final class XposedHelpers {
      */
     public static void setStaticIntField(Class<?> clazz, String fieldName, int value) {
         try {
-            findField(clazz, fieldName).setInt(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setInt(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1275,7 +1289,9 @@ public final class XposedHelpers {
      */
     public static void setStaticLongField(Class<?> clazz, String fieldName, long value) {
         try {
-            findField(clazz, fieldName).setLong(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setLong(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1290,7 +1306,9 @@ public final class XposedHelpers {
      */
     public static void setStaticShortField(Class<?> clazz, String fieldName, short value) {
         try {
-            findField(clazz, fieldName).setShort(null, value);
+            Field field = findField(clazz, fieldName);
+            removeFinalFlag(field);
+            field.setShort(null, value);
         } catch (IllegalAccessException e) {
             // should not happen
             XposedBridge.log(e);
@@ -1821,6 +1839,15 @@ public final class XposedHelpers {
             }
             return counter;
         }
+    }
+
+    /**
+     * Removes final flag from static fields to fix Android 17 B2+ crash
+     */
+    private static void removeFinalFlag(Field field) {
+        // no need to check, just apply the patch
+        int accessFlags = getIntField(field, "accessFlags");
+        setIntField(field, "accessFlags", accessFlags & ~Modifier.FINAL);
     }
 
     //#################################################################################################
