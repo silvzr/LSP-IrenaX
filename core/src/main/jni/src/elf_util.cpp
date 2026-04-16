@@ -372,138 +372,43 @@ constexpr inline bool contains(std::string_view a, std::string_view b) {
     return a.find(b) != std::string_view::npos;
 }
 
-// A clean and simple struct to hold parsed map entry data.
-struct MapEntry {
-    uintptr_t start_addr;
-    char perms[5] = {0};  // Assured null-termination
-    std::string pathname;
-};
-
 bool ElfImg::findModuleBase() {
-    // Open the maps file using standard C file I/O.
-    FILE *maps = fopen("/proc/self/maps", "r");
+    struct DlIterateData {
+        std::string target_path;
+        uintptr_t base_address = 0;
+    } data{
+        std::string(elf),
+        0
+    };
 
+    auto callback = [](struct dl_phdr_info *info, size_t, void *data_ptr) -> int {
+        auto *data = reinterpret_cast<DlIterateData *>(data_ptr);
+        if (info->dlpi_name) {
+            std::string_view name(info->dlpi_name);
 
-    if (!maps) {
-        LOGE("failed to open /proc/self/maps");
-        return false;
-    }
+            if (name.find(data->target_path) != std::string_view::npos) {
+                data->base_address = info->dlpi_addr;
+                data->target_path = info->dlpi_name;
 
-    char line_buffer[512];  // A reasonable fixed-size buffer for map lines.
-    std::vector<MapEntry> filtered_list;
-
-    // Step 1: Filter all entries containing `elf` in its path.
-    while (fgets(line_buffer, sizeof(line_buffer), maps)) {
-        // Use an intermediate variable of a known, large type to avoid format warnings.
-        // `unsigned long long` and `%llx` are standard and portable.
-        unsigned long long temp_start;
-        char path_buffer[256] = {0};
-        char p[5] = {0};
-
-        // Use the portable `%llx` specifier.
-        int items_parsed =
-            sscanf(line_buffer, "%llx-%*x %4s %*x %*s %*d %255s", &temp_start, p, path_buffer);
-
-        // The filter condition: must parse the path, and it must contain the elf name.
-        if (items_parsed == 3 && strstr(path_buffer, elf.c_str()) != nullptr) {
-            MapEntry entry;
-            // Safely assign the parsed value to the uintptr_t.
-            entry.start_addr = static_cast<uintptr_t>(temp_start);
-            strncpy(entry.perms, p, 4);
-            entry.pathname = path_buffer;
-            filtered_list.push_back(std::move(entry));
-        }
-    }
-   fclose(maps);
-
-    if (filtered_list.empty()) {
-        LOGE("Could not find any mappings for {}", elf.data());
-        return false;
-    }
-
-    // Also part of Step 1: Print the filtered list for debugging.
-    LOGD("Found {} filtered map entries for {}:", filtered_list.size(), elf.data());
-    for (const auto &entry : filtered_list) {
-        LOGD("  {:#x} {} {}", entry.start_addr, entry.perms, entry.pathname);
-    }
-
-    const MapEntry *found_block = nullptr;
-
-    // Step 2: In the filtered list, search for the first `r--p` whose next entry is `r-xp`.
-    for (size_t i = 0; i < filtered_list.size() - 1; ++i) {
-        if (strcmp(filtered_list[i].perms, "r--p") == 0 &&
-            strcmp(filtered_list[i + 1].perms, "r-xp") == 0) {
-            found_block = &filtered_list[i];
-            LOGD("Found `r--p` -> `r-xp` pattern. Choosing base from `r--p` block at {:#x}",
-                 found_block->start_addr);
-            break;  // Pattern found, exit loop.
-        }
-    }
-
-    // Step 2 (Fallback): If the pattern was not found, find the first `r-xp` entry.
-    if (!found_block) {
-        LOGD("`r--p` -> `r-xp` pattern not found. Falling back to first `r-xp` entry.");
-        for (const auto &entry : filtered_list) {
-            if (strcmp(entry.perms, "r-xp") == 0) {
-                found_block = &entry;
-                LOGD("Found first `r-xp` block at {:#x}", found_block->start_addr);
-                break;  // Fallback found, exit loop.
+                return 1;
             }
         }
+
+        return 0;
+    };
+
+    dl_iterate_phdr(callback, &data);
+
+    if (data.base_address != 0) {
+        base = reinterpret_cast<void *>(data.base_address);
+        elf = data.target_path;
+
+        LOGD("get module base {}: {:#x} via dl_iterate_phdr", elf, data.base_address);
+
+        return true;
     }
 
-    // Step 3 (Final Fallback): If still not found, use dl_iterate_phdr to get the base address.
-    /* TODO: Why not just use dl_iterate_phdr..? */
-    if (!found_block) {
-        LOGD("No `r-xp` block found. Falling back to dl_iterate_phdr.");
+    LOGE("Fatal: Could not determine a base address for {}", elf.data());
 
-        struct DlIterateData {
-            std::string target_path;
-            uintptr_t base_address = 0;
-        } data{
-            std::string(elf),
-            0
-        };
-
-        auto callback = [](struct dl_phdr_info *info, size_t, void *data_ptr) -> int {
-            auto *data = reinterpret_cast<DlIterateData *>(data_ptr);
-            if (info->dlpi_name) {
-                std::string_view name(info->dlpi_name);
-
-                if (name.find(data->target_path) != std::string_view::npos) {
-                    data->base_address = info->dlpi_addr;
-                    data->target_path = info->dlpi_name;
-
-                    return 1;
-                }
-            }
-
-            return 0;
-        };
-
-        dl_iterate_phdr(callback, &data);
-
-        if (data.base_address != 0) {
-            base = reinterpret_cast<void *>(data.base_address);
-            elf = data.target_path;
-
-            LOGD("get module base {}: {:#x} via dl_iterate_phdr", elf, data.base_address);
-
-            return true;
-        }
-    }
-
-    if (!found_block) {
-        LOGE("Fatal: Could not determine a base address for {}", elf.data());
-        return false;
-    }
-
-    // Step 3: Use the starting address of the found block as the base address.
-    base = reinterpret_cast<void *>(found_block->start_addr);
-    elf = found_block->pathname;  // Update elf path to the canonical one.
-
-    LOGD("get module base {}: {:#x}", elf, found_block->start_addr);
-    LOGD("update path: {}", elf);
-
-    return true;
+    return false;
 }
