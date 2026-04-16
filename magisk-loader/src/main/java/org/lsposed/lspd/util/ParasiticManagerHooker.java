@@ -19,9 +19,6 @@ import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.util.AndroidRuntimeException;
 import android.util.ArrayMap;
-import android.webkit.WebViewDelegate;
-import android.webkit.WebViewFactory;
-import android.webkit.WebViewFactoryProvider;
 
 import org.lsposed.lspd.ILSPManagerService;
 
@@ -41,8 +38,6 @@ import de.robv.android.xposed.XposedHelpers;
 import hidden.HiddenApiBridge;
 
 public class ParasiticManagerHooker {
-    private static final String CHROMIUM_WEBVIEW_FACTORY_METHOD = "create";
-
     private static PackageInfo managerPkgInfo = null;
     private static int managerFd = -1;
     private final static Map<String, Bundle> states = new ConcurrentHashMap<>();
@@ -255,36 +250,6 @@ public class ParasiticManagerHooker {
             }
         });
 
-        XposedHelpers.findAndHookMethod(WebViewFactory.class, "getProvider", new XC_MethodReplacement() {
-            @Override
-            protected Object replaceHookedMethod(MethodHookParam param) {
-                var sProviderInstance = XposedHelpers.getStaticObjectField(WebViewFactory.class, "sProviderInstance");
-                if (sProviderInstance != null) return sProviderInstance;
-                //noinspection unchecked
-                var providerClass = (Class<WebViewFactoryProvider>) XposedHelpers.callStaticMethod(WebViewFactory.class, "getProviderClass");
-                Method staticFactory = null;
-                try {
-                    staticFactory = providerClass.getMethod(
-                            CHROMIUM_WEBVIEW_FACTORY_METHOD, WebViewDelegate.class);
-                } catch (Exception e) {
-                    Hookers.logE("error instantiating provider with static factory method", e);
-                }
-
-                try {
-                    var webViewDelegateConstructor = WebViewDelegate.class.getDeclaredConstructor();
-                    webViewDelegateConstructor.setAccessible(true);
-                    if (staticFactory != null) {
-                        sProviderInstance = staticFactory.invoke(null, webViewDelegateConstructor.newInstance());
-                    }
-                    XposedHelpers.setStaticObjectField(WebViewFactory.class, "sProviderInstance", sProviderInstance);
-                    Hookers.logD("Loaded provider: " + sProviderInstance);
-                    return sProviderInstance;
-                } catch (Exception e) {
-                    Hookers.logE("error instantiating provider", e);
-                    throw new AndroidRuntimeException(e);
-                }
-            }
-        });
         var stateHooker = new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {

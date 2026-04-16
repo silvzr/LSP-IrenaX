@@ -53,9 +53,6 @@ android {
             excludes += "META-INF/**"
             excludes += "okhttp3/**"
             excludes += "kotlin/**"
-            excludes += "org/**"
-            excludes += "**.properties"
-            excludes += "**.bin"
         }
     }
 
@@ -154,6 +151,14 @@ dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlinx.coroutines.core)
     implementation(projects.services.managerService)
+
+    implementation(libs.androidsvg)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.html)
+    implementation(libs.markwon.image)
+    implementation(libs.markwon.image.glide)
+    implementation(libs.markwon.linkify)
+    implementation(libs.markwon.ext.strikethrough)
 }
 
 configurations.all {

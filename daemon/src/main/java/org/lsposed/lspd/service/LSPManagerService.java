@@ -190,35 +190,6 @@ public class LSPManagerService extends ILSPManagerService.Stub {
         }
     }
 
-    private void ensureWebViewPermission(File f) {
-        if (!f.exists()) return;
-        SELinux.setFileContext(f.getAbsolutePath(), "u:object_r:lsposed_file:s0");
-        try {
-            Os.chown(f.getAbsolutePath(), BuildConfig.MANAGER_INJECTED_UID, BuildConfig.MANAGER_INJECTED_UID);
-        } catch (ErrnoException e) {
-            Log.e(TAG, "chown of webview", e);
-        }
-        if (f.isDirectory()) {
-            for (var g : f.listFiles()) {
-                ensureWebViewPermission(g);
-            }
-        }
-    }
-
-    private void ensureWebViewPermission() {
-        try {
-            var pkgInfo = PackageService.getPackageInfo(BuildConfig.MANAGER_INJECTED_PKG_NAME, 0, 0);
-            if (pkgInfo != null) {
-                var cacheDir = new File(HiddenApiBridge.ApplicationInfo_credentialProtectedDataDir(pkgInfo.applicationInfo) + "/cache");
-                // The cache directory does not exist after `pm clear`
-                cacheDir.mkdirs();
-                ensureWebViewPermission(cacheDir);
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "cannot ensure webview dir", e);
-        }
-    }
-
     synchronized boolean preStartManager() {
         pendingManager = true;
         managerPid = -1;
@@ -249,8 +220,6 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     public @NonNull
     IBinder obtainManagerBinder(@NonNull IBinder heartbeat, int pid, int uid) {
         new ManagerGuard(heartbeat, pid, uid);
-        if (uid == BuildConfig.MANAGER_INJECTED_UID)
-            ensureWebViewPermission();
         return this;
     }
 

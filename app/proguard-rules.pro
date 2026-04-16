@@ -36,3 +36,9 @@
 -keepclassmembers class * implements android.os.Parcelable {
     public static final ** CREATOR;
 }
+
+# Markwon and commonmark
+-keep class io.noties.markwon.** { *; }
+-keep class org.commonmark.** { *; }
+-dontwarn io.noties.markwon.**
+-dontwarn org.commonmark.**
