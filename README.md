@@ -1,6 +1,6 @@
 # LSPosed Framework
 
-[![Build](https://img.shields.io/github/actions/workflow/status/re-zero001/LSPosed-Irena/core.yml?branch=dev&event=push&logo=github&label=Build)](https://github.com/re-zero001/LSPosed-Irena/actions/workflows/core.yml?query=event%3Apush+branch%3Adev+is%3Acompleted) [![Channel](https://img.shields.io/badge/Follow-Telegram-blue.svg?logo=telegram)](https://t.me/lsposed-irena) [![Download](https://img.shields.io/github/v/release/LSPosed/LSPosed?color=orange&logoColor=orange&label=Download&logo=DocuSign)](https://github.com/re-zero001/LSPosed-Irena/releases/latest) [![Total](https://shields.io/github/downloads/LSPosed/LSPosed/total?logo=Bookmeter&label=Counts&logoColor=yellow&color=yellow)](https://github.com/LSPosed/LSPosed/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/silvzr/LSP-IrenaX/core.yml?branch=dev&event=push&logo=github&label=Build)](https://github.com/silvzr/LSP-IrenaX/actions/workflows/core.yml?query=event%3Apush+branch%3Adev+is%3Acompleted) [![Download](https://img.shields.io/github/v/release/LSPosed/LSPosed?color=orange&logoColor=orange&label=Download&logo=DocuSign)](https://github.com/silvzr/LSP-IrenaX/releases/latest) [![Total](https://shields.io/github/downloads/LSPosed/LSPosed/total?logo=Bookmeter&label=Counts&logoColor=yellow&color=yellow)](https://github.com/LSPosed/LSPosed/releases)
 
 ## Introduction 
 
@@ -14,24 +14,23 @@ Android 8.1 ~ 17 B3
 
 ## Install
 
-1. Install Magisk v26+
-2. Install [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext/releases)
-> Or enable zygisk in magisk, we recommend use ZygiskNext.
-3. [Download](#download) and install LSPosed in Magisk app
+1. Install Magisk v26+ / KernelSU / APatch
+2. Install any standalone implementation of Zygisk ([ReZygisk](https://github.com/PerformanC/ReZygisk/releases) is recommended)
+3. [Download](#download) and install LSPosed in your root implementation
 4. Reboot
-5. Open LSPosed manager from notification
+5. Open LSPosed manager from notification and/or action button
 > Or install manager.apk in zip file.
 6. Have fun :)
 
 ## Download
 
-- Go to telegram: [@lsposed-irena](https://t.me/s/lsposed_irena)
-- For canary build, please check [Github Actions](https://github.com/re-zero001/LSPosed-Irena/actions/workflows/core.yml?query=branch%3Adev)
+- [Releases](https://github.com/silvzr/LSP-IrenaX/releases) may be pushed once in a while **ONLY in this repository**
+- For canary builds, please check [Github Actions](https://github.com/silvzr/LSP-IrenaX/actions/workflows/core.yml?query=branch%3Adev)
 
 ## Get Help
 
 **Only bug reports from **THE LATEST DEBUG BUILD** will be accepted.**
-- GitHub issues: [Issues](https://github.com/re-zero001/LSPosed-Irena/issues/)
+- GitHub issues: [Issues](https://github.com/silvzr/LSP-IrenaX/issues/)
 - (For Chinese speakers) 本项目只接受英语**标题**的issue。如果您不懂英语，请使用[翻译工具](https://www.deepl.com/zh/translator)
 
 ## For Developers
@@ -46,7 +45,7 @@ We use our own module repository. We welcome developers to submit modules to our
 
 ## Community Discussion
 
-This fork won't have.
+This fork won't have. Also keep in mind this repo was (and still is partially) meant for personal use and not to replace any of the already existing LSPosed implementations.
 
 ## Credits 
 

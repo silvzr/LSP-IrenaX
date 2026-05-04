@@ -73,7 +73,7 @@ public class HomeFragment extends BaseFragment implements MenuProvider {
             return true;
         });
         menu.findItem(R.id.menu_issue).setOnMenuItemClickListener(v -> {
-            NavUtil.startURL(requireActivity(), "https://github.com/re-zero001/LSPosed-Irena/issues/new/choose");
+            NavUtil.startURL(requireActivity(), "https://github.com/silvzr/LSP-IrenaX/issues/new/choose");
             return true;
         });
     }
@@ -264,8 +264,8 @@ public class HomeFragment extends BaseFragment implements MenuProvider {
             binding.designAboutInfo.setTransformationMethod(new LinkTransformationMethod(requireActivity()));
             binding.designAboutInfo.setText(HtmlCompat.fromHtml(getString(
                     R.string.about_view_source_code,
-                    "<b><a href=\"https://github.com/re-zero001/LSPosed-Irena\">GitHub</a></b>",
-                    "<b><a href=\"https://t.me/lsposed-irena\">Telegram</a></b>"), HtmlCompat.FROM_HTML_MODE_LEGACY));
+                    "<b><a href=\"https://github.com/silvzr/LSP-IrenaX\">GitHub</a></b>",
+                    "<b><a href=\"https://t.me/LSPosed_IrenaX\">Telegram</a></b>"), HtmlCompat.FROM_HTML_MODE_LEGACY));
             binding.designAboutVersion.setText(String.format(LocaleDelegate.getDefaultLocale(), "%s (%d)", BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE));
             return new BlurBehindDialogBuilder(requireContext())
                     .setView(binding.getRoot()).create();
