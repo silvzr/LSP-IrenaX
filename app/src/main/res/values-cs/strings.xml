@@ -42,7 +42,7 @@
         <item quantity="many">%d modolů je možné aktualizovat</item>
         <item quantity="other">%d modulů je možné aktualizovat</item>
     </plurals>
-    <string name="about_view_source_code"><![CDATA[Zobrazit zdrojový kód na %1$s<br/>Připojte se k našemu kanálu %2$s]]></string>
+    <string name="about_view_source_code"><![CDATA[Zobrazit zdrojový kód na %1$s]]></string>
     <string name="translators" comment="Dear translators, please add your home page here following the format. There can be more than one translator. So feel free to append yourself.">https://www.instagram.com/kasi33/</string>
     <string name="install">Instalovat</string>
     <string name="install_summary">Klepnutím nainstalujete LSPosed</string>

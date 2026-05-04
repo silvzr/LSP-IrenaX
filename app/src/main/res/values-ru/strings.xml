@@ -42,7 +42,7 @@
         <item quantity="many">Найдены обновления %d модулей</item>
         <item quantity="other">Найдены обновления %d модулей</item>
     </plurals>
-    <string name="about_view_source_code"><![CDATA[Просмотреть исходный код на %1$s<br/>Присоединяйтесь к нашему %2$s каналу]]></string>
+    <string name="about_view_source_code"><![CDATA[Просмотреть исходный код на %1$s]]></string>
     <string name="translators" comment="Dear translators, please add your home page here following the format. There can be more than one translator. So feel free to append yourself.">Alеxеy</string>
     <string name="install">Установить</string>
     <string name="install_summary">Нажмите, чтобы установить LSPosed</string>

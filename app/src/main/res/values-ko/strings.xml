@@ -36,7 +36,7 @@
     <plurals name="module_repo_upgradable">
         <item quantity="other">%d개의 모듈이 업데이트 가능합니다</item>
     </plurals>
-    <string name="about_view_source_code"><![CDATA[%1$s에서 소스 코드 보기<br/>%2$s 채널에 가입하세요]]></string>
+    <string name="about_view_source_code"><![CDATA[%1$s에서 소스 코드 보기]]></string>
     <string name="translators" comment="Dear translators, please add your home page here following the format. There can be more than one translator. So feel free to append yourself.">green1052</string>
     <string name="install">설치</string>
     <string name="install_summary">LSPosed를 설치하려면 누르세요</string>

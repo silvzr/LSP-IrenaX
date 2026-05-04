@@ -38,7 +38,7 @@
         <item quantity="one">%d මොඩියුලය උත්ශ්‍රේණි කළ හැකිය</item>
         <item quantity="other">%d මොඩියුල උත්ශ්‍රේණි කළ හැකිය </item>
     </plurals>
-    <string name="about_view_source_code"><![CDATA[මූල කේතය බලන්න අපේ නාලිකාවට %1$s<br/> සම්බන්ධ වන්න %2$s]]></string>
+    <string name="about_view_source_code"><![CDATA[මූල කේතය බලන්න අපේ නාලිකාවට %1$s]]></string>
     <string name="translators" comment="Dear translators, please add your home page here following the format. There can be more than one translator. So feel free to append yourself.">null</string>
     <string name="install">ඉන්ට්ට්‍රොල්</string>
     <string name="install_summary">LSPosed ස්ථාපනය කිරීමට තට්ටු කරන්න</string>

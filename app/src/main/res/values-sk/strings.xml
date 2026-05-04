@@ -42,7 +42,7 @@
         <item quantity="many">%d moduly s možnosťou aktualizácie</item>
         <item quantity="other">%d moduly s možnosťou aktualizácie</item>
     </plurals>
-    <string name="about_view_source_code"><![CDATA[Zobraziť zdrojový kód na %1$s<br/>Pripojte sa k nášmu kanálu %2$s]]></string>
+    <string name="about_view_source_code"><![CDATA[Zobraziť zdrojový kód na %1$s]]></string>
     <string name="translators" comment="Dear translators, please add your home page here following the format. There can be more than one translator. So feel free to append yourself.">null</string>
     <string name="install">Inštalácia stránky</string>
     <string name="install_summary">Ťuknutím na položku nainštalujete LSPosed</string>

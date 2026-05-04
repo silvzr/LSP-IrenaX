@@ -38,7 +38,7 @@
         <item quantity="one">%d Modul Update verfügbar</item>
         <item quantity="other">%d Modul Updates verfügbar</item>
     </plurals>
-    <string name="about_view_source_code"><![CDATA[Den Quellcode auf %1$s ansehen<br/>Folge unserem %2$s-Kanal]]></string>
+    <string name="about_view_source_code"><![CDATA[Den Quellcode auf %1$s ansehen]]></string>
     <string name="translators" comment="Dear translators, please add your home page here following the format. There can be more than one translator. So feel free to append yourself.">mshinni80, 
 JJ108</string>
     <string name="install">Installieren</string>
