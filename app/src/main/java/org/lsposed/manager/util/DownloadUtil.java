@@ -19,10 +19,7 @@
 
 package org.lsposed.manager.util;
 
-import android.app.DownloadManager;
 import android.content.Context;
-import android.media.MediaScannerConnection;
-import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
 import android.widget.Toast;
@@ -52,28 +49,7 @@ public class DownloadUtil {
             .build();
 
     public static void download(Context context, String url, String fileName) {
-        if (App.isParasitic) {
-            manualDownload(context, url, fileName);
-            return;
-        }
-
-        try {
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setTitle(fileName);
-            
-            DownloadManager dm = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
-            if (dm != null) {
-                dm.enqueue(request);
-                Toast.makeText(context, R.string.downloading, Toast.LENGTH_SHORT).show();
-            } else {
-                manualDownload(context, url, fileName);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "DownloadManager failed, falling back to manual download", e);
-            manualDownload(context, url, fileName);
-        }
+        manualDownload(context, url, fileName);
     }
 
     private static void manualDownload(Context context, String url, String fileName) {
@@ -112,10 +88,23 @@ public class DownloadUtil {
                     fos.flush();
                 }
 
-                MediaScannerConnection.scanFile(context, new String[]{file.getAbsolutePath()}, null, (path, uri) -> {
-                    Log.d(TAG, "File scanned: " + path);
-                    App.getMainHandler().post(() -> 
-                        Toast.makeText(context, context.getString(R.string.downloaded_to, path), Toast.LENGTH_LONG).show());
+                // Use file:// URI — temporarily disable StrictMode's FileUriExposedException
+                // check, then restore the original policy immediately after.
+                // TODO: find a way to start install intent with shell uid (2000) which may lack REQUEST_INSTALL_PACKAGES permission
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                intent.setDataAndType(android.net.Uri.fromFile(file), "application/vnd.android.package-archive");
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                App.getMainHandler().post(() -> {
+                    android.os.StrictMode.VmPolicy oldPolicy = android.os.StrictMode.getVmPolicy();
+                    android.os.StrictMode.setVmPolicy(new android.os.StrictMode.VmPolicy.Builder().build());
+                    try {
+                        context.startActivity(intent);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Module view failed", e);
+                        Toast.makeText(context, "Module view failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    } finally {
+                        android.os.StrictMode.setVmPolicy(oldPolicy);
+                    }
                 });
             }
         });
