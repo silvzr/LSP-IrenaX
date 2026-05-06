@@ -99,14 +99,14 @@ public:
     explicit Logcat(JNIEnv *env, jobject thiz, jmethodID method) :
             env_(env), thiz_(thiz), refresh_fd_method_(method) {}
 
-    [[noreturn]] void Run();
+    void Run();
 
 private:
     inline void RefreshFd(bool is_verbose);
 
     inline void Log(std::string_view str);
 
-    void OnCrash(int err);
+    bool OnCrash(int err);
 
     void ProcessBuffer(struct log_msg *buf);
 
@@ -192,24 +192,24 @@ inline void Logcat::Log(std::string_view str) {
     }
 }
 
-void Logcat::OnCrash(int err) {
+bool Logcat::OnCrash(int err) {
     using namespace std::string_literals;
-    constexpr size_t max_restart_logd_wait = 1U << 10;
+    constexpr size_t restart_wait = 5;
     static size_t kLogdCrashCount = 0;
-    static size_t kLogdRestartWait = 1 << 3;
-    if (++kLogdCrashCount >= kLogdRestartWait) {
+    static bool kLogdRestarted = false;
+    if (kLogdRestarted) {
+        Log("\nLogd restart failed, giving up...\n");
+        return true;
+    } else if (++kLogdCrashCount >= restart_wait) {
         Log("\nLogd crashed too many times, trying manually start...\n");
         __system_property_set("ctl.restart", "logd");
-        if (kLogdRestartWait < max_restart_logd_wait) {
-            kLogdRestartWait <<= 1;
-        } else {
-            kLogdCrashCount = 0;
-        }
+        kLogdRestarted = true;
     } else {
         Log("\nLogd maybe crashed (err="s + strerror(err) + "), retrying in 1s...\n");
     }
 
     std::this_thread::sleep_for(1s);
+    return false;
 }
 
 void Logcat::ProcessBuffer(struct log_msg *buf) {
@@ -280,7 +280,7 @@ void Logcat::Run() {
             if (modules_print_count_ >= kMaxLogSize) [[unlikely]] RefreshFd(false);
         }
 
-        OnCrash(errno);
+        if (OnCrash(errno)) break;
     }
 }
 
