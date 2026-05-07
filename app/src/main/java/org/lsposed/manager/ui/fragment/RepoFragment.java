@@ -403,7 +403,7 @@ public class RepoFragment extends BaseFragment implements RepoLoader.RepoListene
             ModuleUtil.InstalledModule installedModule = moduleUtil.getModule(module.getName());
             if (installedModule != null) {
                 var ver = repoLoader.getModuleLatestVersion(installedModule.packageName);
-                if (ver != null && ver.upgradable(installedModule.versionCode, installedModule.versionName))
+                if (ver != null && ver.upgradable(installedModule.versionCode, installedModule.versionName) && !RepoLoader.isUpdateIgnored(installedModule.packageName, ver))
                     return ver;
             }
             return null;
