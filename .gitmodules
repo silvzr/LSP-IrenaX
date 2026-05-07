@@ -3,7 +3,7 @@
 	url = https://github.com/PerformanC/PLTI.git
 [submodule "external/lsplant"]
 	path = external/lsplant
-	url = https://github.com/re-zero001/LSPlant.git
+	url = https://github.com/silvzr/LSPlant.git
 [submodule "external/dobby"]
 	path = external/dobby
 	url = https://github.com/re-zero001/Dobby.git
