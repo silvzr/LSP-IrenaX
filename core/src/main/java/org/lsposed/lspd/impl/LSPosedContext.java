@@ -332,7 +332,7 @@ public class LSPosedContext implements XposedInterface {
         }
 
         writer.flush();
-        Log.println(priority, "LSPosedFramework", output.toString());
+        Log.println(priority, TAG, output.toString());
     }
 
     @Override
