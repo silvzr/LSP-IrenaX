@@ -28,8 +28,6 @@ import android.content.SharedPreferences;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 
-import com.android.internal.util.XmlUtils;
-
 import org.lsposed.lspd.core.BuildConfig;
 import org.lsposed.lspd.util.MetaDataReader;
 import org.lsposed.lspd.util.Utils.Log;
@@ -39,6 +37,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Path;
@@ -64,6 +64,7 @@ public final class XSharedPreferences implements SharedPreferences {
     private static final String TAG = "XSharedPreferences";
     private static final HashMap<WatchKey, PrefsData> sWatcherKeyInstances = new HashMap<>();
     private static final Object sContent = new Object();
+    private static final Method sReadMapXml = findReadMapXml();
     private static Thread sWatcherDaemon = null;
     private static WatchService sWatcher;
 
@@ -75,6 +76,37 @@ public final class XSharedPreferences implements SharedPreferences {
     private long mLastModified;
     private long mFileSize;
     private WatchKey mWatchKey;
+
+    private static Method findReadMapXml() {
+        try {
+            var method = Class.forName("com.android.internal.util.XmlUtils")
+                    .getDeclaredMethod("readMapXml", InputStream.class);
+            method.setAccessible(true);
+            return method;
+        } catch (ReflectiveOperationException e) {
+            Log.w(TAG, "XmlUtils.readMapXml not found", e);
+            return null;
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static Map readMapXml(InputStream stream) throws XmlPullParserException, IOException {
+        if (sReadMapXml == null) {
+            throw new IOException("XmlUtils.readMapXml not available");
+        }
+        try {
+            return (Map) sReadMapXml.invoke(null, stream);
+        } catch (InvocationTargetException e) {
+            var cause = e.getCause();
+            if (cause instanceof XmlPullParserException xmlPullParserException) throw xmlPullParserException;
+            if (cause instanceof IOException ioException) throw ioException;
+            if (cause instanceof RuntimeException runtimeException) throw runtimeException;
+            if (cause instanceof Error error) throw error;
+            throw new IOException("XmlUtils.readMapXml failed", cause);
+        } catch (IllegalAccessException e) {
+            throw new IOException("XmlUtils.readMapXml inaccessible", e);
+        }
+    }
 
     private static void initWatcherDaemon() {
         sWatcherDaemon = new Thread() {
@@ -336,7 +368,7 @@ public final class XSharedPreferences implements SharedPreferences {
         try {
             result = SELinuxHelper.getAppDataFileService().getFileInputStream(mFilename, mFileSize, mLastModified);
             if (result.stream != null) {
-                map = XmlUtils.readMapXml(result.stream);
+                map = readMapXml(result.stream);
                 result.stream.close();
             } else {
                 // The file is unchanged, keep the current values
