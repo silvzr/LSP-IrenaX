@@ -86,6 +86,7 @@ android {
 cmaker {
     default {
         arguments += arrayOf(
+            "-DCORE_ROOT=${File(rootDir.absolutePath, "core/src/main/jni")}",
             "-DMODULE_NAME=${name.lowercase()}_$moduleBaseId",
             "-DAPI=${name.lowercase()}",
             "-DAPI_VERSION=1",
@@ -115,12 +116,14 @@ val zipAll = tasks.register("zipAll", fun Task.() {
     group = "LSPosed"
 })
 
-fun afterEval() = android.applicationVariants.forEach { variant ->
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
     val variantCapped = variant.name.replaceFirstChar { it.uppercase() }
     val variantLowered = variant.name.lowercase()
-    val buildTypeCapped = variant.buildType.name.replaceFirstChar { it.uppercase() }
-    val buildTypeLowered = variant.buildType.name.lowercase()
-    val flavorLowered = variant.flavorName!!.lowercase()
+    val buildType = checkNotNull(variant.buildType)
+    val flavorName = checkNotNull(variant.flavorName)
+    val buildTypeCapped = buildType.replaceFirstChar { it.uppercase() }
+    val buildTypeLowered = buildType.lowercase()
+    val flavorLowered = flavorName.lowercase()
 
     val magiskDir = layout.buildDirectory.dir("magisk/$variantLowered")
 
@@ -248,10 +251,6 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
         dependsOn(flashKsuTask)
         commandLine(adb, "reboot")
     })
-}
-
-afterEvaluate {
-    afterEval()
 }
 
 val adb: String = androidComponents.sdkComponents.adb.get().asFile.absolutePath

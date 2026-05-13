@@ -34,7 +34,6 @@ cmaker {
         arguments.addAll(
             arrayOf(
                 "-DEXTERNAL_ROOT=${File(rootDir.absolutePath, "external")}",
-                "-DCORE_ROOT=${File(rootDir.absolutePath, "core/src/main/jni")}",
             )
         )
         val flags = arrayOf(
@@ -56,7 +55,7 @@ cmaker {
 }
 
 val repo = jgit.repo()
-val commitCount = (repo?.commitCount("refs/remotes/origin/dev") ?: 1) + 4200
+val commitCount = (repo?.commitCount("HEAD") ?: 1) + 4200
 val latestTag = repo?.latestTag?.removePrefix("v")?.substringBefore("-") ?: "1.9.2"
 
 val injectedPackageName by extra("com.android.shell")
@@ -85,30 +84,21 @@ subprojects {
             ndkVersion = androidCompileNdkVersion
             buildToolsVersion = androidBuildToolsVersion
 
-            externalNativeBuild {
-                cmake {
-                    version = androidCmakeVersion
-                }
+            externalNativeBuild.cmake.version = androidCmakeVersion
+
+            defaultConfig.minSdk = androidMinSdkVersion
+            val applicationDefaultConfig = defaultConfig as? ApplicationDefaultConfig
+            if (applicationDefaultConfig != null) {
+                applicationDefaultConfig.targetSdk = androidTargetSdkVersion
+                applicationDefaultConfig.versionCode = verCode
+                applicationDefaultConfig.versionName = verName
             }
 
-            defaultConfig {
-                minSdk = androidMinSdkVersion
-                if (this is ApplicationDefaultConfig) {
-                    targetSdk = androidTargetSdkVersion
-                    versionCode = verCode
-                    versionName = verName
-                }
-            }
+            lint.abortOnError = true
+            lint.checkReleaseBuilds = false
 
-            lint {
-                abortOnError = true
-                checkReleaseBuilds = false
-            }
-
-            compileOptions {
-                sourceCompatibility = androidSourceCompatibility
-                targetCompatibility = androidTargetCompatibility
-            }
+            compileOptions.sourceCompatibility = androidSourceCompatibility
+            compileOptions.targetCompatibility = androidTargetCompatibility
         }
     }
     plugins.withType(JavaPlugin::class.java) {

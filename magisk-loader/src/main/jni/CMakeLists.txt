@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
 project(lspd)
 
+set(MODULE_API "${API}")
+
 add_subdirectory(${CORE_ROOT} core)
 
 configure_file(template/loader.cpp src/loader.cpp)
@@ -17,7 +19,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(${PROJECT_NAME} core log)
 
 if (DEFINED DEBUG_SYMBOLS_PATH)
-    set(DEBUG_SYMBOLS_PATH ${DEBUG_SYMBOLS_PATH}/${API})
+    set(DEBUG_SYMBOLS_PATH ${DEBUG_SYMBOLS_PATH}/${MODULE_API})
     message(STATUS "Debug symbols will be placed at ${DEBUG_SYMBOLS_PATH}")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}

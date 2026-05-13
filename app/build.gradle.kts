@@ -72,7 +72,7 @@ android {
     sourceSets {
         named("main") {
             res {
-                srcDirs("src/common/res")
+                directories += "src/common/res"
             }
         }
     }
