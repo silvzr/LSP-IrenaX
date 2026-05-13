@@ -40,9 +40,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import io.github.libxposed.service.IXposedScopeCallback;
 import io.github.libxposed.service.IXposedService;
@@ -52,7 +55,10 @@ public class LSPModuleService extends IXposedService.Stub {
     private final static String TAG = "LSPosedModuleService";
 
     private final static Set<Integer> uidSet = ConcurrentHashMap.newKeySet();
+    private final static Set<ModuleBinderKey> sentBinderSet = ConcurrentHashMap.newKeySet();
+    private final static Set<ModuleBinderKey> sendingBinderSet = ConcurrentHashMap.newKeySet();
     private final static Map<Module, LSPModuleService> serviceMap = Collections.synchronizedMap(new WeakHashMap<>());
+    private final static ExecutorService binderExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "module-binder-delivery"));
 
     public final static String FILES_DIR = "files";
 
@@ -61,34 +67,97 @@ public class LSPModuleService extends IXposedService.Stub {
 
     static void uidClear() {
         uidSet.clear();
+        sentBinderSet.clear();
+        sendingBinderSet.clear();
     }
 
     static void uidStarts(int uid) {
-        if (!uidSet.contains(uid)) {
-            uidSet.add(uid);
-            var module = ConfigManager.getInstance().getModule(uid);
-            if (module != null && module.file != null && !module.file.legacy) {
-                var service = serviceMap.computeIfAbsent(module, LSPModuleService::new);
-                service.sendBinder(uid);
-            }
+        if (uidSet.add(uid)) {
+            sendBinderForUid(uid);
         }
     }
 
     static void uidGone(int uid) {
         uidSet.remove(uid);
+        sentBinderSet.removeIf(k -> k.uid == uid);
+        sendingBinderSet.removeIf(k -> k.uid == uid);
     }
 
-    private void sendBinder(int uid) {
+    static void sendBindersForRunningModules() {
+        for (int uid : uidSet) {
+            sendBinderForUid(uid);
+        }
+    }
+
+    static void sendBinderForRunningModule(String packageName) {
+        for (int uid : uidSet) {
+            var module = ConfigManager.getInstance().getModule(uid);
+            if (module != null && Objects.equals(module.packageName, packageName)) {
+                sendBinderForModule(module, uid);
+            }
+        }
+    }
+
+    private static void sendBinderForUid(int uid) {
+        var module = ConfigManager.getInstance().getModule(uid);
+        if (module != null) {
+            sendBinderForModule(module, uid);
+        }
+    }
+
+    private static void sendBinderForModule(Module module, int uid) {
+        if (module.file == null || module.file.legacy) {
+            return;
+        }
+        var key = new ModuleBinderKey(module.packageName, uid);
+        if (sentBinderSet.contains(key) || !sendingBinderSet.add(key)) {
+            return;
+        }
+        try {
+            LSPModuleService service;
+            synchronized (serviceMap) {
+                service = serviceMap.computeIfAbsent(module, LSPModuleService::new);
+            }
+            binderExecutor.execute(() -> service.sendBinder(uid, key));
+        } catch (Throwable e) {
+            sendingBinderSet.remove(key);
+            Log.w(TAG, "failed to schedule module binder for uid " + uid, e);
+        }
+    }
+
+    private void sendBinder(int uid, ModuleBinderKey key) {
         var name = loadedModule.packageName;
         try {
             int userId = uid / PackageService.PER_USER_RANGE;
             if (!ConfigManager.getInstance().isModuleEnabledForUser(name, userId)) {
                 return;
             }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                try {
+                    DeviceIdleService.addPowerSaveTempWhitelistApp(name, userId, "shell");
+                    Log.d(TAG, "add " + userId + ":" + name + " to power save temp whitelist for 30s");
+                    try {
+                        Thread.sleep(400L);
+                    } catch (InterruptedException e) {
+                        Log.d(TAG, "sendBinder interrupted while waiting for whitelist, continuing for " + name, e);
+                    }
+                } catch (Throwable e) {
+                    Log.e(TAG, "failed to add " + userId + ":" + name + " to power save temp whitelist", e);
+                }
+            }
             var authority = name + AUTHORITY_SUFFIX;
             var provider = ActivityManagerService.getContentProvider(authority, userId);
+            for (int attempt = 1; provider == null && attempt < 3; attempt++) {
+                Log.d(TAG, "no service provider for " + name + ", attempt " + attempt);
+                try {
+                    Thread.sleep(1000L);
+                } catch (InterruptedException e) {
+                    Log.d(TAG, "sendBinder interrupted during retry sleep for " + name + ", continuing", e);
+                }
+                provider = ActivityManagerService.getContentProvider(authority, userId);
+            }
             if (provider == null) {
-                Log.d(TAG, "no service provider for " + name);
+                Log.d(TAG, "no service provider for " + name + " after 3 attempts");
                 return;
             }
             var extra = new Bundle();
@@ -105,11 +174,36 @@ public class LSPModuleService extends IXposedService.Stub {
             }
             if (reply != null) {
                 Log.d(TAG, "sent module binder to " + name);
+                sentBinderSet.add(key);
             } else {
                 Log.w(TAG, "failed to send module binder to " + name);
             }
         } catch (Throwable e) {
             Log.w(TAG, "failed to send module binder for uid " + uid, e);
+        } finally {
+            sendingBinderSet.remove(key);
+        }
+    }
+
+    private static final class ModuleBinderKey {
+        private final String packageName;
+        private final int uid;
+
+        private ModuleBinderKey(String packageName, int uid) {
+            this.packageName = packageName;
+            this.uid = uid;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof ModuleBinderKey)) return false;
+            var key = (ModuleBinderKey) o;
+            return uid == key.uid && Objects.equals(packageName, key.packageName);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(packageName, uid);
         }
     }
 
