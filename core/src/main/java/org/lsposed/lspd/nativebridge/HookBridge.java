@@ -3,6 +3,7 @@ package org.lsposed.lspd.nativebridge;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 
 import dalvik.annotation.optimization.FastNative;
 
@@ -17,9 +18,18 @@ public class HookBridge {
 
     public static native <T> Constructor<T> findClassInitializer(Class<T> clazz);
 
-    public static native Object invokeOriginalMethod(Executable method, Object thisObject, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException;
+    public static native Object invokeOriginalMethod(Executable method, Object thisObject, Object[] args, boolean isConstructor) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException;
 
-    public static native <T> Object invokeSpecialMethod(Executable method, char[] shorty, Class<T> clazz, Object thisObject, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException;
+    public static Object invokeOriginalMethod(Executable method, Object thisObject, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+        return invokeOriginalMethod(method, thisObject, args,
+                method instanceof Constructor && !Modifier.isStatic(method.getModifiers()));
+    }
+
+    public static native <T> Object invokeSpecialMethod(Executable method, Class<T> clazz, Object thisObject, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException;
+
+    public static Object invokeSpecialMethod(Executable method, Object thisObject, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException {
+        return invokeSpecialMethod(method, null, thisObject, args);
+    }
 
     @FastNative
     public static native boolean instanceOf(Object obj, Class<?> clazz);
