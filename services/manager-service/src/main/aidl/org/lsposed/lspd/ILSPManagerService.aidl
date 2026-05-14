@@ -16,11 +16,11 @@ interface ILSPManagerService {
 
     ParcelableListSlice<PackageInfo> getInstalledPackagesFromAllUsers(int flags, boolean filterNoProcess) = 2;
 
-    String[] enabledModules() = 3;
+    List<Application> enabledModules() = 3;
 
-    boolean enableModule(String packageName) = 4;
+    boolean enableModule(String packageName, int userId) = 4;
 
-    boolean disableModule(String packageName) = 5;
+    boolean disableModule(String packageName, int userId) = 5;
 
     boolean setModuleScope(String packageName, in List<Application> scope) = 6;
 
@@ -100,5 +100,5 @@ interface ILSPManagerService {
 
     boolean deleteModulePrefs(String packageName, int userId) = 54;
 
-    void removeBlockedScopeRequest(String packageName) = 55;
+    void removeBlockedScopeRequest(String packageName, int userId) = 55;
 }

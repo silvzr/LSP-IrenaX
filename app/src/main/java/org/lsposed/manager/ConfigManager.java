@@ -82,18 +82,18 @@ public class ConfigManager {
         return list;
     }
 
-    public static String[] getEnabledModules() {
+    public static List<Application> getEnabledModules() {
         try {
             return LSPManagerServiceHolder.getService().enabledModules();
         } catch (RemoteException e) {
             Log.e(App.TAG, Log.getStackTraceString(e));
-            return new String[0];
+            return new ArrayList<>();
         }
     }
 
-    public static boolean setModuleEnabled(String packageName, boolean enable) {
+    public static boolean setModuleEnabled(String packageName, int userId, boolean enable) {
         try {
-            return enable ? LSPManagerServiceHolder.getService().enableModule(packageName) : LSPManagerServiceHolder.getService().disableModule(packageName);
+            return enable ? LSPManagerServiceHolder.getService().enableModule(packageName, userId) : LSPManagerServiceHolder.getService().disableModule(packageName, userId);
         } catch (RemoteException e) {
             Log.e(App.TAG, Log.getStackTraceString(e));
             return false;
@@ -159,9 +159,9 @@ public class ConfigManager {
         }
     }
 
-    public static boolean removeBlockedScopeRequest(String packageName) {
+    public static boolean removeBlockedScopeRequest(String packageName, int userId) {
         try {
-            LSPManagerServiceHolder.getService().removeBlockedScopeRequest(packageName);
+            LSPManagerServiceHolder.getService().removeBlockedScopeRequest(packageName, userId);
             return true;
         } catch (RemoteException e) {
             Log.e(App.TAG, Log.getStackTraceString(e));

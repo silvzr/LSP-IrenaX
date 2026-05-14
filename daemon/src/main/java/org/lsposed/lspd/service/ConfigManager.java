@@ -177,6 +177,7 @@ public class ConfigManager {
     private final Map<Pair<String, Integer>, Map<String, HashMap<String, Object>>> cachedConfig = new ConcurrentHashMap<>();
 
     private Set<String> scopeRequestBlocked = new HashSet<>();
+    private Set<String> enabledModules = new HashSet<>();
 
     private static SQLiteDatabase openDb() {
         var params = new SQLiteDatabase.OpenParams.Builder()
@@ -279,7 +280,13 @@ public class ConfigManager {
         enableStatusNotification = bool == null || (boolean) bool;
 
         var set = (Set<String>) config.get("scope_request_blocked");
-        scopeRequestBlocked = set == null ? new HashSet<>() : set;
+        scopeRequestBlocked = normalizeUserStateSet(set);
+
+        set = (Set<String>) config.get("enabled_modules");
+        enabledModules = set == null ? readLegacyEnabledModules() : normalizeUserStateSet(set);
+        if (set == null && !enabledModules.isEmpty()) {
+            updateModulePrefs("lspd", 0, "config", "enabled_modules", new HashSet<>(enabledModules));
+        }
 
         // Don't migrate to ConfigFileManager, as XSharedPreferences will be restored soon
         String string = (String) config.get("misc_path");
@@ -439,6 +446,57 @@ public class ConfigManager {
         } finally {
             db.endTransaction();
         }
+    }
+
+    private static String userStateKey(String packageName, int userId) {
+        return packageName + "/" + userId;
+    }
+
+    private static Application parseUserStateKey(String key) {
+        var app = new Application();
+        var separator = key.lastIndexOf('/');
+        if (separator < 0) {
+            app.packageName = key;
+            app.userId = 0;
+            return app;
+        }
+        app.packageName = key.substring(0, separator);
+        try {
+            app.userId = Integer.parseInt(key.substring(separator + 1));
+        } catch (NumberFormatException e) {
+            app.packageName = key;
+            app.userId = 0;
+        }
+        return app;
+    }
+
+    private static Set<String> normalizeUserStateSet(Set<String> set) {
+        var result = new HashSet<String>();
+        if (set == null) return result;
+        for (var key : set) {
+            var app = parseUserStateKey(key);
+            result.add(userStateKey(app.packageName, app.userId));
+        }
+        return result;
+    }
+
+    private static boolean stateKeyMatchesPackage(String key, String packageName) {
+        return parseUserStateKey(key).packageName.equals(packageName);
+    }
+
+    private Set<String> readLegacyEnabledModules() {
+        var result = new HashSet<String>();
+        try (Cursor cursor = db.rawQuery("SELECT modules.module_pkg_name, scope.user_id FROM modules LEFT JOIN scope ON modules.mid = scope.mid WHERE modules.enabled = 1", null)) {
+            while (cursor.moveToNext()) {
+                var packageName = cursor.getString(0);
+                if (packageName == null || packageName.equals("lspd")) continue;
+                int userId = cursor.isNull(1) ? 0 : cursor.getInt(1);
+                result.add(userStateKey(packageName, userId));
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "migrate enabled modules", e);
+        }
+        return result;
     }
 
     private List<ProcessScope> getAssociatedProcesses(Application app) throws RemoteException {
@@ -671,6 +729,9 @@ public class ConfigManager {
                 app.packageName = cursor.getString(appPkgNameIdx);
                 app.userId = cursor.getInt(userIdIdx);
                 var modulePackageName = cursor.getString(modulePkgNameIdx);
+                if (!isModuleEnabledForUser(modulePackageName, app.userId)) {
+                    continue;
+                }
 
                 // check if module is present in this user
                 if (!moduleAvailability.computeIfAbsent(new Pair<>(modulePackageName, app.userId), n -> {
@@ -735,7 +796,7 @@ public class ConfigManager {
                 for (Application obsoleteModule : obsoleteModules) {
                     Log.d(TAG, "removing obsolete module: " + obsoleteModule.packageName + "/" + obsoleteModule.userId);
                     removeModuleScopeWithoutCache(obsoleteModule);
-                    removeBlockedScopeRequest(obsoleteModule.packageName);
+                    removeBlockedScopeRequest(obsoleteModule.packageName, obsoleteModule.userId);
                 }
             } else {
                 Log.w(TAG, "pm is dead while caching. invalidating...");
@@ -893,9 +954,14 @@ public class ConfigManager {
         return true;
     }
 
-
-    public String[] enabledModules() {
-        return listModules("enabled");
+    public List<Application> enabledModules() {
+        var result = new ArrayList<Application>();
+        for (var key : enabledModules) {
+            var app = parseUserStateKey(key);
+            if (app.packageName.equals("lspd")) continue;
+            result.add(app);
+        }
+        return result;
     }
 
     public boolean removeModule(String packageName) {
@@ -913,6 +979,7 @@ public class ConfigManager {
     private boolean removeModuleWithoutCache(String packageName) {
         if (packageName.equals("lspd")) return false;
         boolean res = executeInTransaction(() -> db.delete("modules", "module_pkg_name = ?", new String[]{packageName}) > 0);
+        removeEnabledModuleState(packageName);
         removeBlockedScopeRequest(packageName);
         try {
             for (var user : UserService.getUsers()) {
@@ -929,6 +996,7 @@ public class ConfigManager {
         int mid = getModuleId(module.packageName);
         if (mid == -1) return false;
         boolean res = executeInTransaction(() -> db.delete("scope", "mid = ? and user_id = ?", new String[]{String.valueOf(mid), String.valueOf(module.userId)}) > 0);
+        removeEnabledModuleState(module.packageName, module.userId);
         try {
             removeModulePrefs(module.userId, module.packageName);
         } catch (IOException e) {
@@ -942,13 +1010,39 @@ public class ConfigManager {
                 new String[]{app.packageName, String.valueOf(app.userId)}) > 0);
     }
 
-    public boolean disableModule(String packageName) {
+    private boolean setModuleEnabledState(String packageName, int userId, boolean enabled) {
+        var set = new HashSet<>(enabledModules);
+        boolean changed;
+        if (enabled) {
+            changed = set.add(userStateKey(packageName, userId));
+        } else {
+            changed = set.remove(userStateKey(packageName, userId));
+        }
+        if (!changed) return true;
+        enabledModules = set;
+        updateModulePrefs("lspd", 0, "config", "enabled_modules", new HashSet<>(enabledModules));
+
+        var values = new ContentValues();
+        values.put("enabled", enabledModules.stream().anyMatch(key -> stateKeyMatchesPackage(key, packageName)) ? 1 : 0);
+        return db.update("modules", values, "module_pkg_name = ?", new String[]{packageName}) > 0;
+    }
+
+    private void removeEnabledModuleState(String packageName) {
+        var set = new HashSet<>(enabledModules);
+        set.removeIf(key -> stateKeyMatchesPackage(key, packageName));
+        if (set.size() != enabledModules.size()) {
+            enabledModules = set;
+            updateModulePrefs("lspd", 0, "config", "enabled_modules", new HashSet<>(enabledModules));
+        }
+    }
+
+    private void removeEnabledModuleState(String packageName, int userId) {
+        setModuleEnabledState(packageName, userId, false);
+    }
+
+    public boolean disableModule(String packageName, int userId) {
         if (packageName.equals("lspd")) return false;
-        boolean changed = executeInTransaction(() -> {
-            ContentValues values = new ContentValues();
-            values.put("enabled", 0);
-            return db.update("modules", values, "module_pkg_name = ?", new String[]{packageName}) > 0;
-        });
+        boolean changed = setModuleEnabledState(packageName, userId, false);
         if (changed) {
             // called by manager, should be async
             updateCaches(false);
@@ -959,22 +1053,13 @@ public class ConfigManager {
     }
 
     public boolean isModuleEnabledForUser(String packageName, int userId) {
-        try (Cursor cursor = db.query("modules", new String[]{"enabled"},
-                "module_pkg_name = ? AND enabled = 1",
-                new String[]{packageName}, null, null, null)) {
-            return cursor.getCount() > 0;
-        }
+        return enabledModules.contains(userStateKey(packageName, userId));
     }
 
-    public boolean enableModule(String packageName) throws RemoteException {
+    public boolean enableModule(String packageName, int userId) throws RemoteException {
         if (packageName.equals("lspd")) return false;
-        if (!ensureModuleApkPath(packageName, -1)) return false;
-        boolean changed = false;
-        changed = executeInTransaction(() -> {
-            ContentValues values = new ContentValues();
-            values.put("enabled", 1);
-            return db.update("modules", values, "module_pkg_name = ?", new String[]{packageName}) > 0;
-        }) || changed;
+        if (!ensureModuleApkPath(packageName, userId)) return false;
+        boolean changed = setModuleEnabledState(packageName, userId, true);
         if (changed) {
             // Called by manager, should be async
             updateCaches(false);
@@ -1031,20 +1116,27 @@ public class ConfigManager {
         updateModulePrefs("lspd", 0, "config", "enable_dex_obfuscate", on);
     }
 
-    public boolean scopeRequestBlocked(String packageName) {
-        return scopeRequestBlocked.contains(packageName);
+    public boolean scopeRequestBlocked(String packageName, int userId) {
+        return scopeRequestBlocked.contains(userStateKey(packageName, userId));
     }
 
-    public void blockScopeRequest(String packageName) {
+    public void blockScopeRequest(String packageName, int userId) {
         var set = new HashSet<>(scopeRequestBlocked);
-        set.add(packageName);
+        set.add(userStateKey(packageName, userId));
         updateModulePrefs("lspd", 0, "config", "scope_request_blocked", set);
         scopeRequestBlocked = set;
     }
 
     public void removeBlockedScopeRequest(String packageName) {
         var set = new HashSet<>(scopeRequestBlocked);
-        set.remove(packageName);
+        set.removeIf(key -> stateKeyMatchesPackage(key, packageName));
+        updateModulePrefs("lspd", 0, "config", "scope_request_blocked", set);
+        scopeRequestBlocked = set;
+    }
+
+    public void removeBlockedScopeRequest(String packageName, int userId) {
+        var set = new HashSet<>(scopeRequestBlocked);
+        set.remove(userStateKey(packageName, userId));
         updateModulePrefs("lspd", 0, "config", "scope_request_blocked", set);
         scopeRequestBlocked = set;
     }

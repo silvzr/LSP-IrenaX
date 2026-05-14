@@ -60,7 +60,7 @@ public final class ModuleUtil {
     private static ModuleUtil instance = null;
     private final PackageManager pm;
     private final Set<ModuleListener> listeners = ConcurrentHashMap.newKeySet();
-    private HashSet<String> enabledModules = new HashSet<>();
+    private HashSet<Pair<String, Integer>> enabledModules = new HashSet<>();
     private List<UserInfo> users = new ArrayList<>();
     private Map<Pair<String, Integer>, InstalledModule> installedModules = new HashMap<>();
     private boolean modulesLoaded = false;
@@ -144,7 +144,9 @@ public final class ModuleUtil {
 
         this.users = users;
 
-        enabledModules = new HashSet<>(Arrays.asList(ConfigManager.getEnabledModules()));
+        enabledModules = ConfigManager.getEnabledModules().stream()
+                .map(module -> Pair.create(module.packageName, module.userId))
+                .collect(Collectors.toCollection(HashSet::new));
         modulesLoaded = true;
         listeners.forEach(ModuleListener::onModulesReloaded);
     }
@@ -159,8 +161,8 @@ public final class ModuleUtil {
     }
 
     public InstalledModule reloadSingleModule(String packageName, int userId, boolean packageFullyRemoved) {
-        if (packageFullyRemoved && isModuleEnabled(packageName)) {
-            enabledModules.remove(packageName);
+        if (packageFullyRemoved && isModuleEnabled(packageName, userId)) {
+            enabledModules.remove(Pair.create(packageName, userId));
             listeners.forEach(ModuleListener::onModulesReloaded);
         }
         PackageInfo pkg;
@@ -202,20 +204,20 @@ public final class ModuleUtil {
         return modulesLoaded ? installedModules : null;
     }
 
-    public boolean setModuleEnabled(String packageName, boolean enabled) {
-        if (!ConfigManager.setModuleEnabled(packageName, enabled)) {
+    public boolean setModuleEnabled(String packageName, int userId, boolean enabled) {
+        if (!ConfigManager.setModuleEnabled(packageName, userId, enabled)) {
             return false;
         }
         if (enabled) {
-            enabledModules.add(packageName);
+            enabledModules.add(Pair.create(packageName, userId));
         } else {
-            enabledModules.remove(packageName);
+            enabledModules.remove(Pair.create(packageName, userId));
         }
         return true;
     }
 
-    public boolean isModuleEnabled(String packageName) {
-        return enabledModules.contains(packageName);
+    public boolean isModuleEnabled(String packageName, int userId) {
+        return enabledModules.contains(Pair.create(packageName, userId));
     }
 
     public int getEnabledModulesCount() {

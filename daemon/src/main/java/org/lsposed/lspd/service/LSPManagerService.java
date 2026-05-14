@@ -304,13 +304,13 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     }
 
     @Override
-    public String[] enabledModules() {
+    public List<Application> enabledModules() {
         return ConfigManager.getInstance().enabledModules();
     }
 
     @Override
-    public boolean enableModule(String packageName) throws RemoteException {
-        return ConfigManager.getInstance().enableModule(packageName);
+    public boolean enableModule(String packageName, int userId) throws RemoteException {
+        return ConfigManager.getInstance().enableModule(packageName, userId);
     }
 
     @Override
@@ -324,8 +324,8 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     }
 
     @Override
-    public boolean disableModule(String packageName) {
-        return ConfigManager.getInstance().disableModule(packageName);
+    public boolean disableModule(String packageName, int userId) {
+        return ConfigManager.getInstance().disableModule(packageName, userId);
     }
 
     @Override
@@ -556,8 +556,8 @@ public class LSPManagerService extends ILSPManagerService.Stub {
     }
 
     @Override
-    public void removeBlockedScopeRequest(String packageName) {
-        ConfigManager.getInstance().removeBlockedScopeRequest(packageName);
+    public void removeBlockedScopeRequest(String packageName, int userId) {
+        ConfigManager.getInstance().removeBlockedScopeRequest(packageName, userId);
     }
 
     @Override

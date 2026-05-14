@@ -39,7 +39,7 @@ import java.util.zip.GZIPOutputStream;
 import rikka.core.os.FileUtils;
 
 public class BackupUtils {
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
 
     public static void backup(Uri uri) throws JSONException, IOException {
         backup(uri, null);
@@ -56,11 +56,13 @@ public class BackupUtils {
                 continue;
             }
             JSONObject moduleObject = new JSONObject();
-            moduleObject.put("enable", ModuleUtil.getInstance().isModuleEnabled(module.packageName));
+            moduleObject.put("enable", ModuleUtil.getInstance().isModuleEnabled(module.packageName, module.userId));
             moduleObject.put("package", module.packageName);
+            moduleObject.put("userId", module.userId);
             List<ScopeAdapter.ApplicationWithEquals> scope = ConfigManager.getModuleScope(module.packageName);
             JSONArray scopeArray = new JSONArray();
             for (ScopeAdapter.ApplicationWithEquals s : scope) {
+                if (s.userId != module.userId) continue;
                 JSONObject app = new JSONObject();
                 app.put("package", s.packageName);
                 app.put("userId", s.userId);
@@ -89,7 +91,7 @@ public class BackupUtils {
             gzipInputStream.close();
             JSONObject rootObject = new JSONObject(string.toString());
             int version = rootObject.getInt("version");
-            if (version == VERSION || version == 1) {
+            if (version == VERSION || version == 2 || version == 1) {
                 JSONArray modules = rootObject.getJSONArray("modules");
                 for (int i = 0; i < modules.length(); i++) {
                     JSONObject moduleObject = modules.getJSONObject(i);
@@ -97,15 +99,17 @@ public class BackupUtils {
                     if (packageName != null && !name.equals(packageName)) {
                         continue;
                     }
-                    ModuleUtil.InstalledModule module = ModuleUtil.getInstance().getModule(name);
+                    int userId = version >= 3 && moduleObject.has("userId") ? moduleObject.getInt("userId") : 0;
+                    ModuleUtil.InstalledModule module = ModuleUtil.getInstance().getModule(name, userId);
                     if (module != null) {
                         var enabled = moduleObject.getBoolean("enable");
-                        ModuleUtil.getInstance().setModuleEnabled(name, enabled);
+                        ModuleUtil.getInstance().setModuleEnabled(name, userId, enabled);
                         if (!enabled) continue;
                         JSONArray scopeArray = moduleObject.getJSONArray("scope");
-                        HashSet<ScopeAdapter.ApplicationWithEquals> scope = new HashSet<>();
+                        HashSet<ScopeAdapter.ApplicationWithEquals> scope = new HashSet<>(ConfigManager.getModuleScope(name));
+                        scope.removeIf(app -> app.userId == userId);
                         for (int j = 0; j < scopeArray.length(); j++) {
-                            if (version == VERSION) {
+                            if (version >= 2) {
                                 JSONObject app = scopeArray.getJSONObject(j);
                                 scope.add(new ScopeAdapter.ApplicationWithEquals(app.getString("package"), app.getInt("userId")));
                             } else {
