@@ -128,16 +128,21 @@ public class LSPManagerService extends ILSPManagerService.Stub {
 
     private static Intent getManagerIntent() {
         try {
-            String managerPackageName = ConfigManager.isManagerInstalled() ? BuildConfig.DEFAULT_MANAGER_PACKAGE_NAME : BuildConfig.MANAGER_INJECTED_PKG_NAME;
-            var intent = PackageService.getLaunchIntentForPackage(BuildConfig.MANAGER_INJECTED_PKG_NAME);
+            var managerPackageName = BuildConfig.DEFAULT_MANAGER_PACKAGE_NAME;
+            var intent = PackageService.getLaunchIntentForPackage(managerPackageName);
             if (intent == null) {
-                var pkgInfo = PackageService.getPackageInfo(managerPackageName, PackageManager.GET_ACTIVITIES, 0);
+                managerPackageName = BuildConfig.MANAGER_INJECTED_PKG_NAME;
+                intent = PackageService.getLaunchIntentForPackage(managerPackageName);
+            }
+            if (intent == null) {
+                var pkgInfo = PackageService.getPackageInfo(BuildConfig.MANAGER_INJECTED_PKG_NAME, PackageManager.GET_ACTIVITIES, 0);
                 if (pkgInfo != null && pkgInfo.activities != null && pkgInfo.activities.length > 0) {
                     for (var activityInfo : pkgInfo.activities) {
                         if (activityInfo.processName.equals(activityInfo.packageName)) {
                             intent = new Intent();
                             intent.setComponent(new ComponentName(activityInfo.packageName, activityInfo.name));
                             intent.setAction(Intent.ACTION_MAIN);
+                            intent.setPackage(BuildConfig.MANAGER_INJECTED_PKG_NAME);
                             break;
                         }
                     }
@@ -161,6 +166,13 @@ public class LSPManagerService extends ILSPManagerService.Stub {
         intent = new Intent(intent);
         intent.setData(withData);
         try {
+            var guard = ServiceManager.getManagerService().guard;
+            if (guard == null || !guard.isAlive()) {
+                var packageName = intent.getPackage();
+                if (packageName != null) {
+                    ActivityManagerService.forceStopPackage(packageName, 0);
+                }
+            }
             ActivityManagerService.startActivityAsUserWithFeature("android", null, intent, intent.getType(), null, null, 0, 0, null, null, 0);
         } catch (RemoteException e) {
             Log.e(TAG, "failed to open manager");
@@ -227,7 +239,7 @@ public class LSPManagerService extends ILSPManagerService.Stub {
 
     // return true to inject manager
     synchronized boolean shouldStartManager(int pid, int uid, String processName) {
-        if (!enabled || uid != BuildConfig.MANAGER_INJECTED_UID || !BuildConfig.DEFAULT_MANAGER_PACKAGE_NAME.equals(processName) || !pendingManager)
+        if (!enabled || uid != BuildConfig.MANAGER_INJECTED_UID || !BuildConfig.DEFAULT_MANAGER_PACKAGE_NAME.equals(processName))
             return false;
         pendingManager = false;
         managerPid = pid;
