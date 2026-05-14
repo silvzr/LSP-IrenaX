@@ -131,6 +131,12 @@ public class PackageService {
         return slice == null ? Collections.emptyList() : slice.getList();
     }
 
+    static List<PackageInfo> getInstalledPackages(int flags, int userId) throws RemoteException {
+        IPackageManager pm = getPackageManager();
+        if (pm == null) return Collections.emptyList();
+        return getInstalledPackages(pm, flags, userId);
+    }
+
     static boolean isAlive() {
         var pm = getPackageManager();
         return pm != null && pm.asBinder().isBinderAlive();
@@ -253,6 +259,8 @@ public class PackageService {
     }
 
     public static boolean isPackageAvailable(String packageName, int userId, boolean ignoreHidden) throws RemoteException {
+        IPackageManager pm = getPackageManager();
+        if (pm == null) return false;
         return pm.isPackageAvailable(packageName, userId) || (ignoreHidden && pm.getApplicationHiddenSettingAsUser(packageName, userId));
     }
 

@@ -19,7 +19,6 @@
 
 package org.lsposed.lspd.service;
 
-import static org.lsposed.lspd.service.PackageService.MATCH_ALL_FLAGS;
 import static org.lsposed.lspd.service.PackageService.PER_USER_RANGE;
 import static org.lsposed.lspd.service.ServiceManager.TAG;
 import static org.lsposed.lspd.service.ServiceManager.existsInGlobalNamespace;
@@ -27,7 +26,6 @@ import static org.lsposed.lspd.service.ServiceManager.toGlobalNamespace;
 
 import android.annotation.SuppressLint;
 import android.content.ContentValues;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageParser;
 import android.database.Cursor;
@@ -70,7 +68,6 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -85,7 +82,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import hidden.HiddenApiBridge;
@@ -335,6 +331,7 @@ public class ConfigManager {
                 Log.d(TAG, "pm & um are ready, updating cache");
                 // must ensure cache is valid for later usage
                 instance.updateCaches(true);
+                PackageMonitorService.getInstance().updateAllPackagesAsync();
                 instance.updateManager(false);
             }
         }
@@ -350,6 +347,9 @@ public class ConfigManager {
         updateConfig();
         // must ensure cache is valid for later usage
         updateCaches(true);
+        if (PackageService.isAlive() && UserService.isAlive()) {
+            PackageMonitorService.getInstance().updateAllPackagesAsync();
+        }
     }
 
 
@@ -583,42 +583,38 @@ public class ConfigManager {
 
             modules.stream().parallel().filter(m -> {
                 var oldModule = cachedModule.get(m.packageName);
-                PackageInfo pkgInfo = null;
+                PackageMonitorService.ModuleInfo moduleInfo = null;
                 try {
-                    pkgInfo = PackageService.getPackageInfoFromAllUsers(m.packageName, MATCH_ALL_FLAGS).values().stream().findFirst().orElse(null);
+                    moduleInfo = PackageMonitorService.getInstance().getModuleInfo(m.packageName, -1);
                 } catch (Throwable e) {
                     Log.w(TAG, "Get package info of " + m.packageName, e);
                 }
-                if (pkgInfo == null || pkgInfo.applicationInfo == null) {
+                if (moduleInfo == null) {
                     Log.w(TAG, "Failed to find package info of " + m.packageName);
                     obsoleteModules.add(m.packageName);
                     return false;
                 }
 
                 if (oldModule != null &&
-                        pkgInfo.applicationInfo.sourceDir != null &&
+                        moduleInfo.applicationInfo.sourceDir != null &&
                         m.apkPath != null && oldModule.apkPath != null &&
                         existsInGlobalNamespace(m.apkPath) &&
                         Objects.equals(m.apkPath, oldModule.apkPath) &&
-                        Objects.equals(new File(pkgInfo.applicationInfo.sourceDir).getParent(), new File(m.apkPath).getParent())) {
+                        Objects.equals(m.apkPath, moduleInfo.apkPath)) {
                     if (oldModule.appId != -1) {
                         Log.d(TAG, m.packageName + " did not change, skip caching it");
                     } else {
                         // cache from system server, update application info
-                        oldModule.applicationInfo = pkgInfo.applicationInfo;
+                        oldModule.applicationInfo = moduleInfo.applicationInfo;
                     }
                     return false;
                 }
-                m.apkPath = getModuleApkPath(pkgInfo.applicationInfo);
-                if (m.apkPath == null) {
-                    Log.w(TAG, "Failed to find path of " + m.packageName);
-                    obsoleteModules.add(m.packageName);
-                    return false;
-                } else {
+                if (!Objects.equals(m.apkPath, moduleInfo.apkPath)) {
+                    m.apkPath = moduleInfo.apkPath;
                     obsoletePaths.put(m.packageName, m.apkPath);
                 }
-                m.appId = pkgInfo.applicationInfo.uid;
-                m.applicationInfo = pkgInfo.applicationInfo;
+                m.appId = moduleInfo.appId;
+                m.applicationInfo = moduleInfo.applicationInfo;
                 m.service = oldModule != null ? oldModule.service : new LSPInjectedModuleService(m.packageName);
                 return true;
             }).forEach(m -> {
@@ -789,25 +785,17 @@ public class ConfigManager {
         }
     }
 
-    @Nullable
-    public String getModuleApkPath(ApplicationInfo info) {
-        String[] apks;
-        if (info.splitSourceDirs != null) {
-            apks = Arrays.copyOf(info.splitSourceDirs, info.splitSourceDirs.length + 1);
-            apks[info.splitSourceDirs.length] = info.sourceDir;
-        } else apks = new String[]{info.sourceDir};
-        var apkPath = Arrays.stream(apks).parallel().filter(apk -> {
-            if (apk == null) {
-                Log.w(TAG, info.packageName + " has null apk path???");
-                return false;
-            }
-            try (var zip = new ZipFile(toGlobalNamespace(apk))) {
-                return zip.getEntry("META-INF/xposed/java_init.list") != null || zip.getEntry("assets/xposed_init") != null;
-            } catch (IOException e) {
-                return false;
-            }
-        }).findFirst();
-        return apkPath.orElse(null);
+    private boolean ensureModuleApkPath(String packageName, int userId) throws RemoteException {
+        if (packageName.equals("lspd")) return false;
+        var moduleInfo = PackageMonitorService.getInstance().getModuleInfo(packageName, userId);
+        if (moduleInfo == null || moduleInfo.apkPath == null) return false;
+        return updateModuleApkPath(packageName, moduleInfo.apkPath, false) || hasModule(packageName);
+    }
+
+    private boolean hasModule(String packageName) {
+        try (Cursor cursor = db.query("modules", new String[]{"module_pkg_name"}, "module_pkg_name=?", new String[]{packageName}, null, null, null)) {
+            return cursor != null && cursor.moveToNext();
+        }
     }
 
     public boolean updateModuleApkPath(String packageName, String apkPath, boolean force) {
@@ -856,7 +844,7 @@ public class ConfigManager {
 
     public boolean setModuleScope(String packageName, List<Application> scopes) throws RemoteException {
         if (scopes == null) return false;
-        enableModule(packageName);
+        if (!ensureModuleApkPath(packageName, -1)) return false;
         int mid = getModuleId(packageName);
         if (mid == -1) return false;
         executeInTransaction(() -> {
@@ -980,11 +968,8 @@ public class ConfigManager {
 
     public boolean enableModule(String packageName) throws RemoteException {
         if (packageName.equals("lspd")) return false;
-        PackageInfo pkgInfo = PackageService.getPackageInfoFromAllUsers(packageName, PackageService.MATCH_ALL_FLAGS).values().stream().findFirst().orElse(null);
-        if (pkgInfo == null || pkgInfo.applicationInfo == null) return false;
-        var modulePath = getModuleApkPath(pkgInfo.applicationInfo);
-        if (modulePath == null) return false;
-        boolean changed = updateModuleApkPath(packageName, modulePath, false);
+        if (!ensureModuleApkPath(packageName, -1)) return false;
+        boolean changed = false;
         changed = executeInTransaction(() -> {
             ContentValues values = new ContentValues();
             values.put("enabled", 1);
