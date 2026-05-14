@@ -31,10 +31,3 @@
     public static void after(io.github.libxposed.api.XposedInterface$AfterHookCallback);
     public static void after(io.github.libxposed.api.XposedInterface$AfterHookCallback, ***);
 }
-
--assumenosideeffects class android.util.Log {
-    public static *** v(...);
-    public static *** d(...);
-}
--repackageclasses
--allowaccessmodification

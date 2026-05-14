@@ -12,10 +12,6 @@ android {
         }
     }
 
-    defaultConfig {
-        consumerProguardFiles("api/api/proguard-rules.pro")
-    }
-
     buildFeatures {
         buildConfig = false
     }

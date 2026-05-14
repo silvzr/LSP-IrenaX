@@ -26,16 +26,6 @@ android {
         aidl = true
     }
 
-    defaultConfig {
-        consumerProguardFiles("proguard-rules.pro")
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
-
     aidlPackagedList += "org/lsposed/lspd/models/Module.aidl"
     aidlPackagedList += "org/lsposed/lspd/models/PreloadedApk.aidl"
     namespace = "org.lsposed.lspd.daemonservice"

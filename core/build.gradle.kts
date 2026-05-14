@@ -36,18 +36,9 @@ android {
     }
 
     defaultConfig {
-        consumerProguardFiles("proguard-rules.pro")
-
         buildConfigField("String", "FRAMEWORK_NAME", """"${rootProject.name}"""")
         buildConfigField("String", "VERSION_NAME", """"$verName"""")
         buildConfigField("long", "VERSION_CODE", """$verCode""")
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            proguardFiles("proguard-rules.pro")
-        }
     }
 }
 

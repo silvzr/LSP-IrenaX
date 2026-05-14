@@ -26,15 +26,6 @@ android {
         aidl = true
     }
 
-    defaultConfig {
-        consumerProguardFiles("proguard-rules.pro")
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
     namespace = "org.lsposed.lspd.managerservice"
 }
 
