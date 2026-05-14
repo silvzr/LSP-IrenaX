@@ -24,11 +24,9 @@ import android.app.ActivityThread;
 import android.app.LoadedApk;
 import android.content.pm.ApplicationInfo;
 import android.content.res.CompatibilityInfo;
-import android.os.Build;
 
 import com.android.internal.os.ZygoteInit;
 
-import org.lsposed.hiddenapibypass.LSPass;
 import org.lsposed.lspd.deopt.PrebuiltMethodsDeopter;
 import org.lsposed.lspd.hooker.AttachHooker;
 import org.lsposed.lspd.hooker.CrashDumpHooker;
@@ -66,10 +64,6 @@ public class Startup {
     }
 
     public static void bootstrapXposed() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            LSPass.setHiddenApiExemptions("L");
-        }
-
         // Initialize the Xposed framework
         try {
             startBootstrapHook(XposedInit.startsSystemServer);
