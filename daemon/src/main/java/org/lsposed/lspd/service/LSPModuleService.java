@@ -438,7 +438,7 @@ public class LSPModuleService extends IXposedService.Stub {
         }
         try {
             ConfigManager.getInstance().updateModulePrefs(loadedModule.packageName, userId, group, values);
-            ((LSPInjectedModuleService) loadedModule.service).onUpdateRemotePreferences(group, diff);
+            ((LSPInjectedModuleService) loadedModule.service).onUpdateRemotePreferences(userId, group, diff);
         } catch (Throwable e) {
             throw new RemoteException(e.getMessage());
         }

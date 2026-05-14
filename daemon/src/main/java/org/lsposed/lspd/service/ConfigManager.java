@@ -1161,7 +1161,7 @@ public class ConfigManager {
         });
     }
 
-    private void removeModulePrefs(int uid, String packageName) throws IOException {
+    private void removeModulePrefs(int userId, String packageName) throws IOException {
         if (packageName == null) return;
         var path = Paths.get(getPrefsPath(packageName, uid));
         ConfigFileManager.deleteFolderIfExists(path);

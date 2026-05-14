@@ -12,6 +12,7 @@ import android.util.Log;
 import org.lsposed.lspd.models.Module;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,7 +25,7 @@ public class LSPInjectedModuleService extends ILSPInjectedModuleService.Stub {
 
     private final String mPackageName;
 
-    Map<String, Set<IRemotePreferenceCallback>> callbacks = new ConcurrentHashMap<>();
+    Map<RemotePreferenceKey, Set<IRemotePreferenceCallback>> callbacks = new ConcurrentHashMap<>();
 
     LSPInjectedModuleService(String packageName) {
         mPackageName = packageName;
@@ -50,10 +51,11 @@ public class LSPInjectedModuleService extends ILSPInjectedModuleService.Stub {
         var userId = Binder.getCallingUid() / PER_USER_RANGE;
         bundle.putSerializable("map", ConfigManager.getInstance().getModulePrefs(mPackageName, userId, group));
         if (callback != null) {
-            var groupCallbacks = callbacks.computeIfAbsent(group, k -> ConcurrentHashMap.newKeySet());
+            var callbackKey = new RemotePreferenceKey(userId, group);
+            var groupCallbacks = callbacks.computeIfAbsent(callbackKey, k -> ConcurrentHashMap.newKeySet());
             groupCallbacks.add(callback);
             try {
-                callback.asBinder().linkToDeath(() -> groupCallbacks.remove(callback), 0);
+                callback.asBinder().linkToDeath(() -> removeCallback(callbackKey, callback), 0);
             } catch (RemoteException e) {
                 Log.w(TAG, "requestRemotePreferences: ", e);
             }
@@ -86,16 +88,46 @@ public class LSPInjectedModuleService extends ILSPInjectedModuleService.Stub {
         }
     }
 
-    void onUpdateRemotePreferences(String group, Bundle diff) {
-        var groupCallbacks = callbacks.get(group);
+    void onUpdateRemotePreferences(int userId, String group, Bundle diff) {
+        var callbackKey = new RemotePreferenceKey(userId, group);
+        var groupCallbacks = callbacks.get(callbackKey);
         if (groupCallbacks != null) {
             for (var callback : groupCallbacks) {
                 try {
                     callback.onUpdate(diff);
                 } catch (RemoteException e) {
-                    groupCallbacks.remove(callback);
+                    removeCallback(callbackKey, callback);
                 }
             }
+        }
+    }
+
+    private void removeCallback(RemotePreferenceKey key, IRemotePreferenceCallback callback) {
+        callbacks.computeIfPresent(key, (k, groupCallbacks) -> {
+            groupCallbacks.remove(callback);
+            return groupCallbacks.isEmpty() ? null : groupCallbacks;
+        });
+    }
+
+    private static final class RemotePreferenceKey {
+        private final int userId;
+        private final String group;
+
+        private RemotePreferenceKey(int userId, String group) {
+            this.userId = userId;
+            this.group = group;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof RemotePreferenceKey)) return false;
+            var key = (RemotePreferenceKey) o;
+            return userId == key.userId && Objects.equals(group, key.group);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * userId + Objects.hashCode(group);
         }
     }
 }
