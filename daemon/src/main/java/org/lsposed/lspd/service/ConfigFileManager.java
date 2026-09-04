@@ -432,6 +432,26 @@ public class ConfigFileManager {
         return result;
     }
 
+    static Properties readModernModuleProperties(ZipFile apkFile) {
+        if (apkFile.getEntry("META-INF/xposed/java_init.list") == null) return null;
+        var properties = readModuleProperties(apkFile);
+        if (properties == null) return null;
+        int minApiVersion = readApiVersion(properties, "minApiVersion");
+        int targetApiVersion = readApiVersion(properties, "targetApiVersion");
+        if (minApiVersion > LSPModuleService.XPOSED_API_VERSION) return null;
+        if (targetApiVersion < LSPModuleService.XPOSED_API_VERSION) return null;
+        return properties;
+    }
+
+    static boolean requiresModernModuleLoading(ZipFile apkFile) {
+        var properties = readModuleProperties(apkFile);
+        if (properties == null) return false;
+        int minApiVersion = readApiVersion(properties, "minApiVersion");
+        int targetApiVersion = readApiVersion(properties, "targetApiVersion");
+        return minApiVersion > LSPModuleService.XPOSED_API_VERSION
+                || targetApiVersion >= LSPModuleService.XPOSED_API_VERSION;
+    }
+
     private static boolean isExceptionPassthrough(Properties properties) {
         if (properties == null) {
             return false;

@@ -1255,12 +1255,13 @@ public class ConfigManager {
 
     private void removeModulePrefs(int userId, String packageName) throws IOException {
         if (packageName == null) return;
-        var path = Paths.get(getPrefsPath(packageName, uid));
+        var path = miscPath.resolve("prefs" + (userId == 0 ? "" : String.valueOf(userId))).resolve(packageName);
         ConfigFileManager.deleteFolderIfExists(path);
     }
 
     public boolean isModulePrefsExist(String packageName, int userId) {
-        return Files.exists(Paths.get(getPrefsPath(packageName, userId)));
+        var path = miscPath.resolve("prefs" + (userId == 0 ? "" : String.valueOf(userId))).resolve(packageName);
+        return Files.exists(path);
     }
 
     public boolean deleteModulePrefs(String packageName, int userId) {
