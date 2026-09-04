@@ -4,4 +4,4 @@ version=${versionName} (${versionCode})
 versionCode=${versionCode}
 author=${authorList}
 description=Yet another implementation of Xposed Framework, detection enhanced (@ThePedroo). Supports Android 8.1 ~ 17 B3.
-updateJson=
+updateJson=https://raw.githubusercontent.com/silvzr/LSP-IrenaX/dev/update.json
