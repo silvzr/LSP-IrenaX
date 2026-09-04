@@ -19,9 +19,11 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.graphics.drawable.LayerDrawable;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Parcel;
 import android.os.RemoteException;
 import android.util.Log;
 
@@ -30,6 +32,7 @@ import org.lsposed.lspd.util.FakeContext;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -230,15 +233,75 @@ public class LSPNotificationManager {
         return PendingIntent.getBroadcast(new FakeContext(), 3, intent, flags);
     }
 
-    private static PendingIntent getModuleScopeIntent(String modulePackageName, int moduleUserId, String scopePackageName, String action, IXposedScopeCallback callback) {
+    private static PendingIntent getModuleScopeIntent(String modulePackageName, int moduleUserId, String scopePackageName, String action, IXposedScopeCallback callback, boolean api101) {
         var intent = new Intent(moduleScope);
         intent.setPackage("android");
         intent.setData(new Uri.Builder().scheme("module").encodedAuthority(modulePackageName + ":" + moduleUserId).encodedPath(scopePackageName).appendQueryParameter("action", action).build());
         var extras = new Bundle();
         extras.putBinder("callback", callback.asBinder());
+        extras.putBoolean("api101", api101);
         intent.putExtras(extras);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         return PendingIntent.getBroadcast(new FakeContext(), 4, intent, flags);
+    }
+
+    private static final String SCOPE_CALLBACK_DESCRIPTOR = "io.github.libxposed.service.IXposedScopeCallback";
+    // API 101 IXposedScopeCallback transaction codes. these collide with the API 100
+    // ones, so we can't just call the interface directly (see notifyScopeRequest* below):
+    //   2 = onScopeRequestApproved(List<String>), 3 = onScopeRequestFailed(String)
+    // (AIDL-declared 1/2, +1 like every IXposedService code)
+    private static final int SCOPE_CALLBACK_APPROVED_TRANSACTION = 2;
+    private static final int SCOPE_CALLBACK_FAILED_TRANSACTION = 3;
+
+    // deliver scope results on the wire the module was built with. API 100 modules get
+    // per-package callbacks (approved/denied/timeout/failed with a package name),
+    // API 101 modules get onScopeRequestApproved(List) and onScopeRequestFailed(String).
+    // the 101 codes collide with the 100 ones, so those parcels are built by hand.
+    // tbh it's ugly, but the daemon still compiles against the API 100 AIDL.
+    static void notifyScopeRequestApproved(IXposedScopeCallback callback, boolean api101, String scopePackageName) throws RemoteException {
+        if (api101) {
+            var data = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+                data.writeStringList(List.of(scopePackageName));
+                callback.asBinder().transact(SCOPE_CALLBACK_APPROVED_TRANSACTION, data, null, Binder.FLAG_ONEWAY);
+            } finally {
+                data.recycle();
+            }
+        } else {
+            callback.onScopeRequestApproved(scopePackageName);
+        }
+    }
+
+    static void notifyScopeRequestFailed(IXposedScopeCallback callback, boolean api101, String scopePackageName, String message) throws RemoteException {
+        if (api101) {
+            var data = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+                data.writeString(message);
+                callback.asBinder().transact(SCOPE_CALLBACK_FAILED_TRANSACTION, data, null, Binder.FLAG_ONEWAY);
+            } finally {
+                data.recycle();
+            }
+        } else {
+            callback.onScopeRequestFailed(scopePackageName, message);
+        }
+    }
+
+    static void notifyScopeRequestDenied(IXposedScopeCallback callback, boolean api101, String scopePackageName, String message101) throws RemoteException {
+        if (api101) {
+            notifyScopeRequestFailed(callback, true, scopePackageName, message101);
+        } else {
+            callback.onScopeRequestDenied(scopePackageName);
+        }
+    }
+
+    static void notifyScopeRequestTimeout(IXposedScopeCallback callback, boolean api101, String scopePackageName, String message101) throws RemoteException {
+        if (api101) {
+            notifyScopeRequestFailed(callback, true, scopePackageName, message101);
+        } else {
+            callback.onScopeRequestTimeout(scopePackageName);
+        }
     }
 
     private static String getNotificationIdKey(String channel, String modulePackageName, int moduleUserId) {
@@ -295,7 +358,7 @@ public class LSPNotificationManager {
         }
     }
 
-    static void requestModuleScope(String modulePackageName, int moduleUserId, String scopePackageName, IXposedScopeCallback callback) {
+    static void requestModuleScope(String modulePackageName, int moduleUserId, String scopePackageName, IXposedScopeCallback callback, boolean api101) {
         var context = new FakeContext();
         var userName = UserService.getUserName(moduleUserId);
         String title = context.getString(R.string.xposed_module_request_scope_title);
@@ -313,21 +376,21 @@ public class LSPNotificationManager {
                 .setAutoCancel(true)
                 .setTimeoutAfter(1000 * 60 * 60)
                 .setStyle(style)
-                .setDeleteIntent(getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "delete", callback))
+                .setDeleteIntent(getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "delete", callback, api101))
                 .setActions(new Notification.Action.Builder(
                                 Icon.createWithResource(context, R.drawable.ic_baseline_check_24),
                                 context.getString(R.string.scope_approve),
-                                getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "approve", callback))
+                                getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "approve", callback, api101))
                                 .build(),
                         new Notification.Action.Builder(
                                 Icon.createWithResource(context, R.drawable.ic_baseline_close_24),
                                 context.getString(R.string.scope_deny),
-                                getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "deny", callback))
+                                getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "deny", callback, api101))
                                 .build(),
                         new Notification.Action.Builder(
                                 Icon.createWithResource(context, R.drawable.ic_baseline_block_24),
                                 context.getString(R.string.nerver_ask_again),
-                                getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "block", callback))
+                                getModuleScopeIntent(modulePackageName, moduleUserId, scopePackageName, "block", callback, api101))
                                 .build()
                 ).build();
         notification.extras.putString("android.substName", "LSPosed");
@@ -338,7 +401,7 @@ public class LSPNotificationManager {
                     notification, 0);
         } catch (RemoteException e) {
             try {
-                callback.onScopeRequestFailed(scopePackageName, e.getMessage());
+                notifyScopeRequestFailed(callback, api101, scopePackageName, e.getMessage());
             } catch (RemoteException ignored) {
             }
             Log.e(TAG, "request module scope", e);

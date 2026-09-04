@@ -47,6 +47,7 @@ public class LoadedApkCtorHooker implements XposedInterface.Hooker {
                 XResources.setPackageNameForResDir(packageName, loadedApk.getResDir());
             }
 
+            boolean includeCode = XposedHelpers.getBooleanField(loadedApk, "mIncludeCode");
             if (packageName.equals("android")) {
                 if (XposedInit.startsSystemServer) {
                     Hookers.logD("LoadedApk#<init> is android, skip: " + mAppDir);
@@ -54,6 +55,9 @@ public class LoadedApkCtorHooker implements XposedInterface.Hooker {
                 } else {
                     packageName = "system";
                 }
+            } else if (!includeCode) {
+                Hookers.logD("LoadedApk#<init> has no code, skip: " + mAppDir);
+                return;
             }
 
             if (!XposedInit.loadedPackagesInProcess.add(packageName)) {
@@ -65,6 +69,7 @@ public class LoadedApkCtorHooker implements XposedInterface.Hooker {
             if (Log.getStackTraceString(new Throwable()).
                     contains("android.app.ActivityThread$ApplicationThread.schedulePreload")) {
                 Hookers.logD("LoadedApk#<init> maybe oneplus's custom opt, skip");
+                XposedInit.loadedPackagesInProcess.remove(packageName);
                 return;
             }
 

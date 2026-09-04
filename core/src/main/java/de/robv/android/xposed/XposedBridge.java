@@ -133,7 +133,7 @@ public final class XposedBridge {
      * Returns the currently installed version of the Xposed framework.
      */
     public static int getXposedVersion() {
-        return XposedInterface.API;
+        return XposedInterface.LIB_API;
     }
 
     /**
@@ -207,7 +207,7 @@ public final class XposedBridge {
             throw new IllegalArgumentException("callback should not be null!");
         }
 
-        if (!HookBridge.hookMethod(false, (Executable) hookMethod, LSPosedBridge.NativeHooker.class, callback.priority, callback)) {
+        if (!HookBridge.hookMethod(HookBridge.API_MODE_LEGACY, (Executable) hookMethod, LSPosedBridge.NativeHooker.class, callback.priority, callback)) {
             log("Failed to hook " + hookMethod);
             return null;
         }
@@ -226,7 +226,7 @@ public final class XposedBridge {
     @Deprecated
     public static void unhookMethod(Member hookMethod, XC_MethodHook callback) {
         if (hookMethod instanceof Executable) {
-            HookBridge.unhookMethod(false, (Executable) hookMethod, callback);
+            HookBridge.unhookMethod(HookBridge.API_MODE_LEGACY, (Executable) hookMethod, callback);
         }
     }
 

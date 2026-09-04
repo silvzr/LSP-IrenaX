@@ -61,7 +61,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import hidden.HiddenApiBridge;
-import io.github.libxposed.service.IXposedService;
 import rikka.parcelablelist.ParcelableListSlice;
 
 public class LSPManagerService extends ILSPManagerService.Stub {
@@ -281,7 +280,7 @@ public class LSPManagerService extends ILSPManagerService.Stub {
 
     @Override
     public int getXposedApiVersion() {
-        return IXposedService.API;
+        return LSPModuleService.XPOSED_API_VERSION;
     }
 
     @Override

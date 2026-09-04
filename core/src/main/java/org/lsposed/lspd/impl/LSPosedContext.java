@@ -60,12 +60,27 @@ public class LSPosedContext implements XposedInterface {
     private final String mPackageName;
     private final ApplicationInfo mApplicationInfo;
     private final ILSPInjectedModuleService service;
+    private final ExceptionMode mDefaultExceptionMode;
     private final Map<String, SharedPreferences> mRemotePrefs = new ConcurrentHashMap<>();
 
-    LSPosedContext(String packageName, ApplicationInfo applicationInfo, ILSPInjectedModuleService service) {
+    LSPosedContext(String packageName, ApplicationInfo applicationInfo, ILSPInjectedModuleService service,
+                   ExceptionMode defaultExceptionMode) {
         this.mPackageName = packageName;
         this.mApplicationInfo = applicationInfo;
         this.service = service;
+        this.mDefaultExceptionMode = defaultExceptionMode;
+    }
+
+    // module lifecycle dispatch: fire every callback, modules react to what they override.
+
+    public static void callOnModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
+        for (XposedModule module : modules) {
+            try {
+                module.onModuleLoaded(param);
+            } catch (Throwable t) {
+                Log.e(TAG, "Error when calling onModuleLoaded of " + module.getModuleApplicationInfo().packageName, t);
+            }
+        }
     }
 
     public static void callOnPackageLoaded(XposedModuleInterface.PackageLoadedParam param) {
@@ -73,7 +88,17 @@ public class LSPosedContext implements XposedInterface {
             try {
                 module.onPackageLoaded(param);
             } catch (Throwable t) {
-                Log.e(TAG, "Error when calling onPackageLoaded of " + module.getApplicationInfo().packageName, t);
+                Log.e(TAG, "Error when calling onPackageLoaded of " + module.getModuleApplicationInfo().packageName, t);
+            }
+        }
+    }
+
+    public static void callOnPackageReady(XposedModuleInterface.PackageReadyParam param) {
+        for (XposedModule module : modules) {
+            try {
+                module.onPackageReady(param);
+            } catch (Throwable t) {
+                Log.e(TAG, "Error when calling onPackageReady of " + module.getModuleApplicationInfo().packageName, t);
             }
         }
     }
@@ -83,7 +108,17 @@ public class LSPosedContext implements XposedInterface {
             try {
                 module.onSystemServerLoaded(param);
             } catch (Throwable t) {
-                Log.e(TAG, "Error when calling onSystemServerLoaded of " + module.getApplicationInfo().packageName, t);
+                Log.e(TAG, "Error when calling onSystemServerLoaded of " + module.getModuleApplicationInfo().packageName, t);
+            }
+        }
+    }
+
+    public static void callOnSystemServerStarting(XposedModuleInterface.SystemServerStartingParam param) {
+        for (XposedModule module : modules) {
+            try {
+                module.onSystemServerStarting(param);
+            } catch (Throwable t) {
+                Log.e(TAG, "Error when calling onSystemServerStarting of " + module.getModuleApplicationInfo().packageName, t);
             }
         }
     }
@@ -106,7 +141,9 @@ public class LSPosedContext implements XposedInterface {
                 Log.e(TAG, "  This may cause strange issues and must be fixed by the module developer.");
                 return false;
             }
-            var ctx = new LSPosedContext(module.packageName, module.applicationInfo, module.service);
+            module.file.moduleLibraryNames.forEach(NativeAPI::recordNativeEntrypoint);
+            var defaultExceptionMode = module.file.exceptionPassthrough ? ExceptionMode.PASSTHROUGH : ExceptionMode.PROTECTIVE;
+            var ctx = new LSPosedContext(module.packageName, module.applicationInfo, module.service, defaultExceptionMode);
             for (var entry : module.file.moduleClassNames) {
                 var moduleClass = mcl.loadClass(entry);
                 Log.d(TAG, "  Loading class " + moduleClass);
@@ -115,17 +152,39 @@ public class LSPosedContext implements XposedInterface {
                     continue;
                 }
                 try {
-                    var moduleEntry = moduleClass.getConstructor(XposedInterface.class, XposedModuleInterface.ModuleLoadedParam.class);
-                    var moduleContext = (XposedModule) moduleEntry.newInstance(ctx, new XposedModuleInterface.ModuleLoadedParam() {
+                    // API 100 modules take a (XposedInterface, ModuleLoadedParam) ctor, API 101
+                    // modules use no-arg + attachFramework. try API 100 first, fall back to
+                    // API 101, decided per module so nobody has to configure anything.
+                    XposedModule moduleContext;
+                    try {
+                        var moduleEntry = moduleClass.getConstructor(XposedInterface.class,
+                                XposedModuleInterface.ModuleLoadedParam.class);
+                        moduleContext = (XposedModule) moduleEntry.newInstance(ctx, new XposedModuleInterface.ModuleLoadedParam() {
+                            @Override
+                            public boolean isSystemServer() {
+                                return LSPosedContext.isSystemServer;
+                            }
+
+                            @NonNull
+                            @Override
+                            public String getProcessName() {
+                                return LSPosedContext.processName;
+                            }
+                        });
+                    } catch (NoSuchMethodException e) {
+                        moduleContext = (XposedModule) moduleClass.getConstructor().newInstance();
+                        moduleContext.attachFramework(ctx);
+                    }
+                    moduleContext.onModuleLoaded(new XposedModuleInterface.ModuleLoadedParam() {
                         @Override
                         public boolean isSystemServer() {
-                            return isSystemServer;
+                            return LSPosedContext.isSystemServer;
                         }
 
                         @NonNull
                         @Override
                         public String getProcessName() {
-                            return processName;
+                            return LSPosedContext.processName;
                         }
                     });
                     modules.add(moduleContext);
@@ -133,7 +192,6 @@ public class LSPosedContext implements XposedInterface {
                     Log.e(TAG, "    Failed to load class " + moduleClass, e);
                 }
             }
-            module.file.moduleLibraryNames.forEach(NativeAPI::recordNativeEntrypoint);
             Log.d(TAG, "Loaded module " + module.packageName + ": " + ctx);
         } catch (Throwable e) {
             Log.d(TAG, "Loading module " + module.packageName, e);
@@ -160,6 +218,15 @@ public class LSPosedContext implements XposedInterface {
     }
 
     @Override
+    public long getFrameworkProperties() {
+        try {
+            return service.getFrameworkProperties();
+        } catch (RemoteException e) {
+            throw new XposedFrameworkError(e);
+        }
+    }
+
+    @Override
     public int getFrameworkPrivilege() {
         try {
             return service.getFrameworkPrivilege();
@@ -167,6 +234,39 @@ public class LSPosedContext implements XposedInterface {
             return -1;
         }
     }
+
+    // Hooking (API 101)
+
+    @Override
+    @NonNull
+    public HookBuilder hook(@NonNull Executable origin) {
+        return LSPosedBridge.newHookBuilder(this, origin, mDefaultExceptionMode);
+    }
+
+    @Override
+    @NonNull
+    public HookBuilder hookClassInitializer(@NonNull Class<?> origin) {
+        return LSPosedBridge.newClassInitializerHookBuilder(this, origin, mDefaultExceptionMode);
+    }
+
+    @Override
+    public boolean deoptimize(@NonNull Executable executable) {
+        return LSPosedBridge.doDeoptimize(executable);
+    }
+
+    @NonNull
+    @Override
+    public Invoker<?, Method> getInvoker(@NonNull Method method) {
+        return LSPosedBridge.newInvoker(method);
+    }
+
+    @NonNull
+    @Override
+    public <T> CtorInvoker<T> getInvoker(@NonNull Constructor<T> constructor) {
+        return LSPosedBridge.newInvoker(constructor);
+    }
+
+    // Hooking (API 100)
 
     @Override
     @NonNull
@@ -276,6 +376,11 @@ public class LSPosedContext implements XposedInterface {
     }
 
     @Override
+    public void log(int priority, @Nullable String tag, @NonNull String msg) {
+        log(priority, tag, msg, null);
+    }
+
+    @Override
     public void log(int priority, @Nullable String tag, @NonNull String message, @Nullable Throwable throwable) {
         if (message.isEmpty() && throwable == null) {
             return;
@@ -324,6 +429,12 @@ public class LSPosedContext implements XposedInterface {
 
     @NonNull
     @Override
+    public ApplicationInfo getModuleApplicationInfo() {
+        return mApplicationInfo;
+    }
+
+    @NonNull
+    @Override
     public ApplicationInfo getApplicationInfo() {
         return mApplicationInfo;
     }
@@ -336,7 +447,7 @@ public class LSPosedContext implements XposedInterface {
             try {
                 return new LSPosedRemotePreferences(service, n);
             } catch (RemoteException e) {
-                log("Failed to get remote preferences", e);
+                log(Log.ERROR, "null", "Failed to get remote preferences", e);
                 throw new XposedFrameworkError(e);
             }
         });
@@ -348,7 +459,7 @@ public class LSPosedContext implements XposedInterface {
         try {
             return service.getRemoteFileList();
         } catch (RemoteException e) {
-            log("Failed to list remote files", e);
+            log(Log.ERROR, "null", "Failed to list remote files", e);
             throw new XposedFrameworkError(e);
         }
     }

@@ -8,7 +8,9 @@ android {
     sourceSets {
         val main by getting
         main.apply {
-            setRoot("api/api/src/main")
+            // Vendored superset of the libxposed API 100 + 101 surfaces. The upstream
+            // submodule (api/api) is kept purely as a reference and is no longer compiled.
+            setRoot("src/main")
         }
     }
 

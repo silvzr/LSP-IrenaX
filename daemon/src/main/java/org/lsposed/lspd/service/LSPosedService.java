@@ -297,30 +297,33 @@ public class LSPosedService extends ILSPosedService.Stub {
         var action = data.getQueryParameter("action");
         if (action == null) return;
 
+        // does the requesting module speak API 101? the flag rides in the notification
+        // intent, set by LSPNotificationManager#getModuleScopeIntent when it's shown.
+        var api101 = extras.getBoolean("api101", false);
         var iCallback = IXposedScopeCallback.Stub.asInterface(callback);
         try {
             var applicationInfo = PackageService.getApplicationInfo(scopePackageName, 0, userId);
             if (applicationInfo == null) {
-                iCallback.onScopeRequestFailed(scopePackageName, "Package not found");
+                LSPNotificationManager.notifyScopeRequestFailed(iCallback, api101, scopePackageName, "Package not found");
                 return;
             }
 
             switch (action) {
                 case "approve" -> {
                     ConfigManager.getInstance().setModuleScope(packageName, scopePackageName, userId);
-                    iCallback.onScopeRequestApproved(scopePackageName);
+                    LSPNotificationManager.notifyScopeRequestApproved(iCallback, api101, scopePackageName);
                 }
-                case "deny" -> iCallback.onScopeRequestDenied(scopePackageName);
-                case "delete" -> iCallback.onScopeRequestTimeout(scopePackageName);
+                case "deny" -> LSPNotificationManager.notifyScopeRequestDenied(iCallback, api101, scopePackageName, "User rejected");
+                case "delete" -> LSPNotificationManager.notifyScopeRequestTimeout(iCallback, api101, scopePackageName, "Timeout");
                 case "block" -> {
                     ConfigManager.getInstance().blockScopeRequest(packageName);
-                    iCallback.onScopeRequestDenied(scopePackageName);
+                    LSPNotificationManager.notifyScopeRequestDenied(iCallback, api101, scopePackageName, "Blocked by user");
                 }
             }
             Log.i(TAG, action + " scope " + scopePackageName + " for " + packageName + " in user " + userId);
         } catch (RemoteException e) {
             try {
-                iCallback.onScopeRequestFailed(scopePackageName, e.getMessage());
+                LSPNotificationManager.notifyScopeRequestFailed(iCallback, api101, scopePackageName, e.getMessage());
             } catch (RemoteException ignored) {
                 // callback died
             }

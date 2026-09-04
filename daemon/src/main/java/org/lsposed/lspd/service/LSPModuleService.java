@@ -25,6 +25,7 @@ import android.content.AttributionSource;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.util.ArrayMap;
@@ -47,10 +48,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.service.IXposedScopeCallback;
 import io.github.libxposed.service.IXposedService;
 
 public class LSPModuleService extends IXposedService.Stub {
+
+    // Highest libxposed API version implemented by this framework. Modules declaring a
+    // higher minApiVersion are rejected at load time (see ConfigFileManager#loadModule).
+    static final int XPOSED_API_VERSION = XposedInterface.LIB_API;
 
     private final static String TAG = "LSPosedModuleService";
 
@@ -219,10 +225,76 @@ public class LSPModuleService extends IXposedService.Stub {
         return Binder.getCallingUid() / PER_USER_RANGE;
     }
 
+    // dual-wire dispatch (API 100 vs API 101)
+    //
+    // the IXposedService AIDL reused the same transaction codes across APIs but
+    // slapped different methods on the privilege/properties and scope calls:
+    //   6  = getFrameworkPrivilege (int) in 100, getFrameworkProperties (long) in 101
+    //   12 = requestScope(String)         in 100, requestScope(List)          in 101
+    //   13 = removeScope(String)->String  in 100, removeScope(List)->void     in 101
+    // note the codes are the AIDL-declared values + 1: the AGP aidl compiler
+    // maps `= N` to FIRST_CALL_TRANSACTION + N, and both the daemon and every
+    // module are built with it, so the wire agrees (a module's getScope really
+    // arrives as 11). codes 2-5, 11 and 21-33 are type-compatible, so the
+    // generated stub keeps handling those. which wire a module speaks comes
+    // from module.prop targetApiVersion (API 100 modules don't declare it), so
+    // they keep working untouched. tbh idk if this survives the next API bump,
+    // but it's the only way to serve both APIs right now.
+
+    private static final int TRANSACTION_GET_FRAMEWORK_PRIVILEGE = 6;
+    private static final int TRANSACTION_REQUEST_SCOPE = 12;
+    private static final int TRANSACTION_REMOVE_SCOPE = 13;
+
+    private boolean speaksApi101() {
+        return loadedModule.file != null && loadedModule.file.targetApiVersion >= 101;
+    }
+
+    @Override
+    public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+        switch (code) {
+            case TRANSACTION_GET_FRAMEWORK_PRIVILEGE:
+                data.enforceInterface(getInterfaceDescriptor());
+                if (speaksApi101()) {
+                    reply.writeNoException();
+                    reply.writeLong(getFrameworkProperties());
+                } else {
+                    reply.writeNoException();
+                    reply.writeInt(getFrameworkPrivilege());
+                }
+                return true;
+            case TRANSACTION_REQUEST_SCOPE:
+                data.enforceInterface(getInterfaceDescriptor());
+                if (speaksApi101()) {
+                    var packages = data.createStringArrayList();
+                    var callback = IXposedScopeCallback.Stub.asInterface(data.readStrongBinder());
+                    requestScope(packages, callback);
+                } else {
+                    var packageName = data.readString();
+                    var callback = IXposedScopeCallback.Stub.asInterface(data.readStrongBinder());
+                    requestScope(packageName, callback);
+                }
+                return true;
+            case TRANSACTION_REMOVE_SCOPE:
+                data.enforceInterface(getInterfaceDescriptor());
+                if (speaksApi101()) {
+                    var packages = data.createStringArrayList();
+                    removeScope(packages);
+                    reply.writeNoException();
+                } else {
+                    var packageName = data.readString();
+                    reply.writeNoException();
+                    reply.writeString(removeScope(packageName));
+                }
+                return true;
+            default:
+                return super.onTransact(code, data, reply, flags);
+        }
+    }
+
     @Override
     public int getAPIVersion() throws RemoteException {
         ensureModule();
-        return API;
+        return XPOSED_API_VERSION;
     }
 
     @Override
@@ -249,6 +321,16 @@ public class LSPModuleService extends IXposedService.Stub {
         return IXposedService.FRAMEWORK_PRIVILEGE_ROOT;
     }
 
+    // API 101 wire: framework capabilities as a bitmask (XposedInterface#PROP_*)
+    long getFrameworkProperties() throws RemoteException {
+        ensureModule();
+        var properties = XposedInterface.PROP_CAP_SYSTEM | XposedInterface.PROP_CAP_REMOTE;
+        if (ConfigManager.getInstance().dexObfuscate()) {
+            properties |= XposedInterface.PROP_RT_API_PROTECTION;
+        }
+        return properties;
+    }
+
     @Override
     public List<String> getScope() throws RemoteException {
         ensureModule();
@@ -267,8 +349,29 @@ public class LSPModuleService extends IXposedService.Stub {
         if (ConfigManager.getInstance().scopeRequestBlocked(loadedModule.packageName)) {
             callback.onScopeRequestDenied(packageName);
         } else {
-            LSPNotificationManager.requestModuleScope(loadedModule.packageName, userId, packageName, callback);
+            LSPNotificationManager.requestModuleScope(loadedModule.packageName, userId, packageName, callback, false);
             callback.onScopeRequestPrompted(packageName);
+        }
+    }
+
+    // API 101 wire: bulk scope request. reuses the per-package notification flow of
+    // API 100, only the callback delivery differs (onScopeRequestApproved(List) /
+    // onScopeRequestFailed(String)). could've ported irena's bulk notification, but
+    // that'd mean rewriting the whole intent plumbing for little gain.
+    void requestScope(List<String> packages, IXposedScopeCallback callback) throws RemoteException {
+        Objects.requireNonNull(packages, "packages cannot be null");
+        Objects.requireNonNull(callback, "callback cannot be null");
+        var userId = ensureModule();
+        if (packages.isEmpty()) {
+            LSPNotificationManager.notifyScopeRequestFailed(callback, true, null, "Invalid request");
+            return;
+        }
+        if (ConfigManager.getInstance().scopeRequestBlocked(loadedModule.packageName)) {
+            LSPNotificationManager.notifyScopeRequestFailed(callback, true, null, "Blocked by user");
+            return;
+        }
+        for (var packageName : packages) {
+            LSPNotificationManager.requestModuleScope(loadedModule.packageName, userId, packageName, callback, true);
         }
     }
 
@@ -282,6 +385,26 @@ public class LSPModuleService extends IXposedService.Stub {
             return null;
         } catch (Throwable e) {
             return e.getMessage();
+        }
+    }
+
+    // API 101 wire: bulk scope removal. the wire returns void, so errors come back
+    // as a RemoteException instead of an error string.
+    void removeScope(List<String> packages) throws RemoteException {
+        Objects.requireNonNull(packages, "packages cannot be null");
+        var userId = ensureModule();
+        for (var packageName : packages) {
+            try {
+                if (!ConfigManager.getInstance().removeModuleScope(loadedModule.packageName, packageName, userId)) {
+                    throw new RemoteException("Invalid request");
+                }
+            } catch (RemoteException remote) {
+                throw remote;
+            } catch (Throwable e) {
+                var re = new RemoteException(e.getMessage());
+                re.initCause(e);
+                throw re;
+            }
         }
     }
 

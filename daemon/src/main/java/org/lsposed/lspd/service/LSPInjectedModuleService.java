@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.service.IXposedService;
 
 public class LSPInjectedModuleService extends ILSPInjectedModuleService.Stub {
@@ -32,6 +33,15 @@ public class LSPInjectedModuleService extends ILSPInjectedModuleService.Stub {
     @Override
     public int getFrameworkPrivilege() {
         return IXposedService.FRAMEWORK_PRIVILEGE_ROOT;
+    }
+
+    @Override
+    public long getFrameworkProperties() {
+        var properties = XposedInterface.PROP_CAP_SYSTEM | XposedInterface.PROP_CAP_REMOTE;
+        if (ConfigManager.getInstance().dexObfuscate()) {
+            properties |= XposedInterface.PROP_RT_API_PROTECTION;
+        }
+        return properties;
     }
 
     @Override

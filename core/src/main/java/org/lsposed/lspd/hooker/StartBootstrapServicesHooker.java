@@ -56,6 +56,16 @@ public class StartBootstrapServicesHooker implements XposedInterface.Hooker {
                     return HandleSystemServerProcessHooker.systemServerCL;
                 }
             });
+
+            // API 101 modules wait for onSystemServerStarting, API 100 modules for
+            // onSystemServerLoaded. dispatch both so neither API gets left out.
+            LSPosedContext.callOnSystemServerStarting(new XposedModuleInterface.SystemServerStartingParam() {
+                @Override
+                @NonNull
+                public ClassLoader getClassLoader() {
+                    return HandleSystemServerProcessHooker.systemServerCL;
+                }
+            });
         } catch (Throwable t) {
             Hookers.logE("error when hooking startBootstrapServices", t);
         }

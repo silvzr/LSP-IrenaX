@@ -123,6 +123,7 @@ androidComponents.onVariants(androidComponents.selector().all()) { variant ->
 }
 
 dependencies {
+    implementation(projects.libxposed.api)
     implementation(projects.libxposed.service)
     implementation(libs.agp.apksig)
     implementation(libs.commons.lang3)
