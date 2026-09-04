@@ -86,6 +86,13 @@ public class AppListFragment extends BaseFragment implements MenuProvider {
             title = module.getAppName();
         }
         binding.toolbar.setSubtitle(module.packageName);
+        int apiVersion = module.targetVersion > 0 ? module.targetVersion : module.minVersion;
+        binding.apiBadge.setText("API " + apiVersion);
+        binding.appBar.addOnOffsetChangedListener((appBar, offset) -> {
+            float alpha = Math.max(0f, 1f + (float) offset / (appBar.getTotalScrollRange() * 0.35f));
+            binding.apiBadgeCard.setAlpha(alpha);
+            binding.apiBadgeCard.setVisibility(alpha > 0f ? View.VISIBLE : View.GONE);
+        });
 
         scopeAdapter = new ScopeAdapter(this, module);
         scopeAdapter.setHasStableIds(true);
