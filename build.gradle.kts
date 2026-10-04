@@ -34,22 +34,41 @@ cmaker {
         arguments.addAll(
             arrayOf(
                 "-DEXTERNAL_ROOT=${File(rootDir.absolutePath, "external")}",
+                "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
+                "-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON",
+                "-DCMAKE_CXX_VISIBILITY_PRESET=hidden",
+                "-DCMAKE_C_VISIBILITY_PRESET=hidden",
+                "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--gc-sections -Wl,--exclude-libs,ALL -Wl,--icf=all",
+                "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--gc-sections -Wl,--exclude-libs,ALL -Wl,--icf=all",
             )
         )
         val flags = arrayOf(
             "-DINJECTED_AID=$injectedPackageUid",
             "-Wno-gnu-string-literal-operator-template",
             "-Wno-c++2b-extensions",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-fno-unwind-tables",
+            "-fno-asynchronous-unwind-tables",
+        )
+        val cppExtraFlags = arrayOf(
+            "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
+            "-D_LIBCPP_HAS_NO_LOCALIZATION",
+            "-fvisibility-global-new-delete=force-hidden",
         )
         cFlags.addAll(flags)
-        cppFlags.addAll(flags)
+        cppFlags.addAll(flags + cppExtraFlags)
         abiFilters("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
     }
     buildTypes {
         if (it.name == "release") {
-            arguments += "-DDEBUG_SYMBOLS_PATH=${
-                layout.buildDirectory.dir("symbols").get().asFile.absolutePath
-            }"
+            arguments += arrayOf(
+                "-DDEBUG_SYMBOLS_PATH=${
+                    layout.buildDirectory.dir("symbols").get().asFile.absolutePath
+                }",
+                "-DCMAKE_C_FLAGS_RELEASE=-Oz",
+                "-DCMAKE_CXX_FLAGS_RELEASE=-Oz",
+            )
         }
     }
 }

@@ -18,4 +18,11 @@ if (DEFINED DEBUG_SYMBOLS_PATH)
             COMMAND ${CMAKE_STRIP} --strip-all $<TARGET_FILE:${PROJECT_NAME}>
             COMMAND ${CMAKE_OBJCOPY} --add-gnu-debuglink ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}/${PROJECT_NAME}.debug
             $<TARGET_FILE:${PROJECT_NAME}>)
+    add_custom_command(TARGET preload POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}
+            COMMAND ${CMAKE_OBJCOPY} --only-keep-debug $<TARGET_FILE:preload>
+            ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}/libpreload.so.debug
+            COMMAND ${CMAKE_STRIP} --strip-all $<TARGET_FILE:preload>
+            COMMAND ${CMAKE_OBJCOPY} --add-gnu-debuglink ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}/libpreload.so.debug
+            $<TARGET_FILE:preload>)
 endif()
