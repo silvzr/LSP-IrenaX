@@ -17,7 +17,7 @@ public class MaterialSwipeRefreshLayout extends SwipeRefreshLayout {
     }
 
     private void init() {
-        setColorSchemeColors(MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimary));
+        setColorSchemeColors(MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary));
         setProgressBackgroundColorSchemeColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurfaceContainer));
     }
 }

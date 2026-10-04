@@ -29,6 +29,12 @@ plugins {
     alias(libs.plugins.nav.safeargs) apply false
 }
 
+val injectedPackageName = "com.android.shell"
+val injectedPackageUid = 2000
+
+extra.set("injectedPackageName", injectedPackageName)
+extra.set("injectedPackageUid", injectedPackageUid)
+
 cmaker {
     default {
         arguments.addAll(
@@ -77,20 +83,29 @@ val repo = jgit.repo()
 val commitCount = (repo?.commitCount("HEAD") ?: 1) + 4200
 val latestTag = repo?.latestTag?.removePrefix("v")?.substringBefore("-") ?: "2.0.1"
 
-val injectedPackageName by extra("com.android.shell")
-val injectedPackageUid by extra(2000)
+val defaultManagerPackageName = "org.lsposed.manager"
+val verCode = commitCount
+val verName = latestTag
+val androidTargetSdkVersion = 36
+val androidMinSdkVersion = 27
+val androidBuildToolsVersion = "37.0.0"
+val androidCompileSdkVersion = 37
+val androidCompileNdkVersion = libs.versions.ndk.get()
+val androidSourceCompatibility = JavaVersion.VERSION_21
+val androidTargetCompatibility = JavaVersion.VERSION_21
+val androidCmakeVersion = "3.28.0+"
 
-val defaultManagerPackageName by extra("org.lsposed.manager")
-val verCode by extra(commitCount)
-val verName by extra(latestTag)
-val androidTargetSdkVersion by extra(36)
-val androidMinSdkVersion by extra(27)
-val androidBuildToolsVersion by extra("36.0.0")
-val androidCompileSdkVersion by extra(36)
-val androidCompileNdkVersion by extra(libs.versions.ndk.get())
-val androidSourceCompatibility by extra(JavaVersion.VERSION_21)
-val androidTargetCompatibility by extra(JavaVersion.VERSION_21)
-val androidCmakeVersion by extra("3.28.0+")
+extra.set("defaultManagerPackageName", defaultManagerPackageName)
+extra.set("verCode", verCode)
+extra.set("verName", verName)
+extra.set("androidTargetSdkVersion", androidTargetSdkVersion)
+extra.set("androidMinSdkVersion", androidMinSdkVersion)
+extra.set("androidBuildToolsVersion", androidBuildToolsVersion)
+extra.set("androidCompileSdkVersion", androidCompileSdkVersion)
+extra.set("androidCompileNdkVersion", androidCompileNdkVersion)
+extra.set("androidSourceCompatibility", androidSourceCompatibility)
+extra.set("androidTargetCompatibility", androidTargetCompatibility)
+extra.set("androidCmakeVersion", androidCmakeVersion)
 
 tasks.register("Delete", Delete::class) {
     delete(rootProject.layout.buildDirectory)

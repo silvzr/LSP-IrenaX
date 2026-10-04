@@ -37,7 +37,7 @@ jobs:
           fi
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -62,7 +62,7 @@ jobs:
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@master
         with:
-          version: 1.12.1
+          version: 1.13.2
 
       - name: Remove Android's cmake
         shell: bash

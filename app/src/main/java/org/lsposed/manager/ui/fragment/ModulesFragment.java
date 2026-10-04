@@ -613,7 +613,7 @@ public class ModulesFragment extends BaseFragment implements ModuleUtil.ModuleLi
             }
             if (warningText != null) {
                 sb.append(warningText);
-                final ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(ResourceUtils.resolveColor(requireActivity().getTheme(), com.google.android.material.R.attr.colorError));
+                final ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(ResourceUtils.resolveColor(requireActivity().getTheme(), androidx.appcompat.R.attr.colorError));
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     final TypefaceSpan typefaceSpan = new TypefaceSpan(Typeface.create("sans-serif-medium", Typeface.NORMAL));
                     sb.setSpan(typefaceSpan, sb.length() - warningText.length(), sb.length(), Spannable.SPAN_INCLUSIVE_INCLUSIVE);

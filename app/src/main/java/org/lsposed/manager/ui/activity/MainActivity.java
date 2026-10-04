@@ -259,7 +259,7 @@ public class MainActivity extends BaseActivity implements RepoLoader.RepoListene
             if (binding != null) {
                 var nav = (NavigationBarView) binding.nav;
                 var badge = nav.getOrCreateBadge(R.id.modules_nav);
-                badge.setBackgroundColor(ResourceUtils.resolveColor(getTheme(), com.google.android.material.R.attr.colorPrimary));
+                badge.setBackgroundColor(ResourceUtils.resolveColor(getTheme(), androidx.appcompat.R.attr.colorPrimary));
                 badge.setBadgeTextColor(ResourceUtils.resolveColor(getTheme(), com.google.android.material.R.attr.colorOnPrimary));
                 if (moduleCount > 0) {
                     badge.setVisible(true);

@@ -30,12 +30,12 @@ plugins {
 
 val daemonName = "LSPosed"
 
-val injectedPackageName: String by rootProject.extra
-val injectedPackageUid: Int by rootProject.extra
+val injectedPackageName = rootProject.extra["injectedPackageName"] as String
+val injectedPackageUid = rootProject.extra["injectedPackageUid"] as Int
 
-val agpVersion: String by project
+val agpVersion = project.findProperty("agpVersion") as? String
 
-val defaultManagerPackageName: String by rootProject.extra
+val defaultManagerPackageName = rootProject.extra["defaultManagerPackageName"] as String
 
 android {
     buildFeatures {

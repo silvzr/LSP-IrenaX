@@ -17,8 +17,8 @@
  * Copyright (C) 2021 - 2022 LSPosed Contributors
  */
 
-val verName: String by rootProject.extra
-val verCode: Int by rootProject.extra
+val verName = rootProject.extra["verName"] as String
+val verCode = rootProject.extra["verCode"] as Int
 
 plugins {
     alias(libs.plugins.agp.lib)

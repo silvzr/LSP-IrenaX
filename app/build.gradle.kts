@@ -35,7 +35,7 @@ apksign {
     keyPasswordProperty = "androidKeyPassword"
 }
 
-val defaultManagerPackageName: String by rootProject.extra
+val defaultManagerPackageName = rootProject.extra["defaultManagerPackageName"] as String
 
 android {
     buildFeatures {

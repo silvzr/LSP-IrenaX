@@ -6,8 +6,7 @@ android {
     namespace = "io.github.libxposed.service"
 
     sourceSets {
-        val main by getting
-        main.apply {
+        getByName("main") {
             setRoot("service/service/src/main")
             aidl.directories += "service/interface/src/main/aidl"
         }

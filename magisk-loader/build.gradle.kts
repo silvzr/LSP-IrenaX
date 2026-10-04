@@ -34,12 +34,12 @@ val moduleName = "LSPosed"
 val moduleBaseId = "lsposed"
 val authors = "Irena & a bunch of contributors"
 
-val injectedPackageName: String by rootProject.extra
-val injectedPackageUid: Int by rootProject.extra
+val injectedPackageName = rootProject.extra["injectedPackageName"] as String
+val injectedPackageUid = rootProject.extra["injectedPackageUid"] as Int
 
-val defaultManagerPackageName: String by rootProject.extra
-val verCode: Int by rootProject.extra
-val verName: String by rootProject.extra
+val defaultManagerPackageName = rootProject.extra["defaultManagerPackageName"] as String
+val verCode = rootProject.extra["verCode"] as Int
+val verName = rootProject.extra["verName"] as String
 
 android {
     flavorDimensions += "api"
