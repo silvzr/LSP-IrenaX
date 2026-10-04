@@ -59,4 +59,5 @@ dependencies {
     implementation(projects.services.managerService)
     compileOnly(libs.androidx.annotation)
     compileOnly(projects.hiddenapi.stubs)
+    compileOnly(libs.cxx.full)
 }

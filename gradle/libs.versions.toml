@@ -60,3 +60,5 @@ gson = { module = "com.google.code.gson:gson", version = "2.14.0" }
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version = "6.1" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.11.0" }
+cxx = { module = "org.lsposed.libcxx:libcxx", version.ref = "ndk" }
+cxx-full = { module = "org.lsposed.libcxx:libcxx-full", version.ref = "ndk" }

@@ -110,6 +110,7 @@ dependencies {
     implementation(projects.services.daemonService)
     compileOnly(libs.androidx.annotation)
     compileOnly(projects.hiddenapi.stubs)
+    compileOnly(libs.cxx.full)
 }
 
 val zipAll = tasks.register("zipAll", fun Task.() {
