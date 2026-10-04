@@ -18,7 +18,7 @@
 	url = https://github.com/topjohnwu/system_properties.git
 [submodule "libxposed/api/api"]
 	path = libxposed/api/api
-	url = https://github.com/libxposed/api.git
+	url = https://github.com/JingMatrix/libxposed-api.git
 [submodule "libxposed/service/service"]
 	path = libxposed/service/service
-	url = https://github.com/libxposed/service.git
+	url = https://github.com/JingMatrix/libxposed-service.git
