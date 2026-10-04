@@ -776,6 +776,41 @@ LSP_DEF_NATIVE_METHOD(jboolean, HookBridge, setTrusted, jobject cookie) {
     return lsplant::MakeDexFileTrusted(env, cookie);
 }
 
+/**
+ * @brief Clears ACC_FINAL on a field, so that reflection will write it again.
+ *
+ * Android 17 refuses every reflective write to a static final field
+ * (`ThrowIAEIfFieldIsNotOverwritable` in `runtime/native/java_lang_reflect_Field.cc`), whatever
+ * the Field's accessible flag says, and clearing the reflective copy's ACC_FINAL does not help
+ * because the check reads the ArtField. This clears it where the check looks.
+ *
+ * The runtime's own JNI SetStatic*Field is the other way in, and is not taken here: it is
+ * `LOG(FATAL)` for anything ART considers unmodifiable, and the carve-out that would spare
+ * android.os.Build carries a TODO to remove it. A field that is no longer final is unmodifiable
+ * to nobody, so this stays a write and never becomes an abort.
+ *
+ * [modifiers] is what java.lang.reflect.Field reports, and the ArtField's access flags have to
+ * agree with it before anything is written: that is what says this pointer is an ArtField laid
+ * out the way this expects, rather than a JNI index id or a layout that has moved.
+ *
+ * @return JNI_TRUE when the field is no longer final.
+ */
+LSP_DEF_NATIVE_METHOD(jboolean, HookBridge, makeFieldWritable, jobject field, jint modifiers) {
+    // jfieldID is the ArtField itself, and `access_flags_` follows the four-byte compressed
+    // `declaring_class_` root that starts it.
+    auto *art_field = reinterpret_cast<uint32_t *>(env->FromReflectedField(field));
+    if (art_field == nullptr) return JNI_FALSE;
+
+    constexpr uint32_t kAccJavaFlagsMask = 0xFFFFu;
+    constexpr uint32_t kAccFinal = 0x0010u;
+
+    uint32_t flags = art_field[1];
+    if ((flags & kAccJavaFlagsMask) != static_cast<uint32_t>(modifiers)) return JNI_FALSE;
+
+    art_field[1] = flags & ~kAccFinal;
+    return JNI_TRUE;
+}
+
 LSP_DEF_NATIVE_METHOD(jobjectArray, HookBridge, callbackSnapshot, jclass callback_class, jobject method) {
     auto target = env->FromReflectedMethod(method);
     HookItem *hook_item = nullptr;
@@ -852,6 +887,7 @@ static JNINativeMethod gMethods[] = {
     LSP_NATIVE_METHOD(HookBridge, instanceOf, "(Ljava/lang/Object;Ljava/lang/Class;)Z"),
     LSP_NATIVE_METHOD(HookBridge, gettid, "()I"),
     LSP_NATIVE_METHOD(HookBridge, setTrusted, "(Ljava/lang/Object;)Z"),
+    LSP_NATIVE_METHOD(HookBridge, makeFieldWritable, "(Ljava/lang/reflect/Field;I)Z"),
     LSP_NATIVE_METHOD(HookBridge, callbackSnapshot, "(Ljava/lang/Class;Ljava/lang/reflect/Executable;)[[Ljava/lang/Object;"),
     LSP_NATIVE_METHOD(HookBridge, callbackSnapshot101, "(Ljava/lang/reflect/Executable;I)[Ljava/lang/Object;"),
 };
