@@ -24,9 +24,11 @@ import java.util.Objects;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
 
+import org.lsposed.lspd.nativebridge.HookBridge;
 import org.lsposed.lspd.util.Utils.Log;
 
 import hidden.ByteBufferDexClassLoader;
+import io.github.libxposed.api.XposedInterface;
 import sun.misc.CompoundEnumeration;
 
 @SuppressWarnings("ConstantConditions")
@@ -35,7 +37,43 @@ public final class LspModuleClassLoader extends ByteBufferDexClassLoader {
     private static final List<File> systemNativeLibraryDirs =
             splitPaths(System.getProperty("java.library.path"));
     private final String apk;
+    private final boolean blockLegacyApi;
     private final List<File> nativeLibraryDirs = new ArrayList<>();
+
+    /** Used when the obfuscation map is unavailable, i.e. on a build that does not obfuscate. */
+    private static final String[] literalLegacyApiPrefixes = {
+            "de.robv.android.xposed.",
+            "android.app.AndroidApp",
+            "android.content.res.XRes",
+            "android.content.res.XModule",
+    };
+
+    /**
+     * What the legacy API is called <i>here</i>, which is not what it is called in source: with
+     * dex obfuscation on the daemon rewrites {@code de.robv.android.xposed}, {@code AndroidAppHelper}
+     * and the {@code XResources} family in the framework dex and in every module dex, so the names
+     * a module asks this loader for are a different random string on every boot. Matching the
+     * literal package would leave the API 102 rule unenforced on exactly the builds that have
+     * obfuscation turned on.
+     */
+    private static final String[] legacyApiPrefixes = resolveLegacyApiPrefixes();
+
+    private static String[] resolveLegacyApiPrefixes() {
+        try {
+            var prefixes = HookBridge.legacyApiPrefixes();
+            if (prefixes != null && prefixes.length != 0) return prefixes;
+        } catch (Throwable t) {
+            Log.w(TAG, "Cannot resolve the legacy API prefixes", t);
+        }
+        return literalLegacyApiPrefixes;
+    }
+
+    private static boolean isLegacyApi(String name) {
+        for (var prefix : legacyApiPrefixes) {
+            if (name.startsWith(prefix)) return true;
+        }
+        return false;
+    }
 
     private static List<File> splitPaths(String searchPath) {
         var result = new ArrayList<File>();
@@ -48,19 +86,23 @@ public final class LspModuleClassLoader extends ByteBufferDexClassLoader {
 
     private LspModuleClassLoader(ByteBuffer[] dexBuffers,
                                  ClassLoader parent,
-                                 String apk) {
+                                 String apk,
+                                 boolean blockLegacyApi) {
         super(dexBuffers, parent);
         this.apk = apk;
+        this.blockLegacyApi = blockLegacyApi;
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private LspModuleClassLoader(ByteBuffer[] dexBuffers,
                                  String librarySearchPath,
                                  ClassLoader parent,
-                                 String apk) {
+                                 String apk,
+                                 boolean blockLegacyApi) {
         super(dexBuffers, librarySearchPath, parent);
         initNativeLibraryDirs(librarySearchPath);
         this.apk = apk;
+        this.blockLegacyApi = blockLegacyApi;
     }
 
     private void initNativeLibraryDirs(String librarySearchPath) {
@@ -70,6 +112,13 @@ public final class LspModuleClassLoader extends ByteBufferDexClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        // The legacy API is part of the boot classpath, so every lookup below would find it. This
+        // is the only gate: Class.forName and loadClass both funnel through this override, which
+        // is what makes the API 102 rule hold for reflective access as well.
+        if (blockLegacyApi && isLegacyApi(name)) {
+            throw new ClassNotFoundException(name + " is not available to modules targeting Xposed API "
+                    + XposedInterface.API_102 + " or higher");
+        }
         var cl = findLoadedClass(name);
         if (cl != null) {
             return cl;
@@ -185,6 +234,20 @@ public final class LspModuleClassLoader extends ByteBufferDexClassLoader {
                                       List<SharedMemory> dexes,
                                       String librarySearchPath,
                                       ClassLoader parent) {
+        return loadApk(apk, dexes, librarySearchPath, parent, false);
+    }
+
+    /**
+     * Loads a module APK.
+     *
+     * @param blockLegacyApi whether the legacy {@code de.robv} API should be invisible to this
+     *                       module, which is what modules targeting API 102 or higher get
+     */
+    public static ClassLoader loadApk(String apk,
+                                      List<SharedMemory> dexes,
+                                      String librarySearchPath,
+                                      ClassLoader parent,
+                                      boolean blockLegacyApi) {
         var dexBuffers = dexes.stream().parallel().map(dex -> {
             try {
                 return dex.mapReadOnly();
@@ -195,9 +258,9 @@ public final class LspModuleClassLoader extends ByteBufferDexClassLoader {
         }).filter(Objects::nonNull).toArray(ByteBuffer[]::new);
         LspModuleClassLoader cl;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            cl = new LspModuleClassLoader(dexBuffers, librarySearchPath, parent, apk);
+            cl = new LspModuleClassLoader(dexBuffers, librarySearchPath, parent, apk, blockLegacyApi);
         } else {
-            cl = new LspModuleClassLoader(dexBuffers, parent, apk);
+            cl = new LspModuleClassLoader(dexBuffers, parent, apk, blockLegacyApi);
             cl.initNativeLibraryDirs(librarySearchPath);
         }
         Arrays.stream(dexBuffers).parallel().forEach(SharedMemory::unmap);

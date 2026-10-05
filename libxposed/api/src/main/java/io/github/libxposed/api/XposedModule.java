@@ -6,12 +6,12 @@ import androidx.annotation.NonNull;
  * Super class which all Xposed module entry classes should extend.<br/>
  * Entry classes will be instantiated exactly once for each process.
  *
- * <p>Superset of the API 100 and API 101 entry points:</p>
+ * <p>Superset of the API 100, API 101 and API 102 entry points:</p>
  * <ul>
  * <li>Modules targeting API 100 declare a constructor taking
  * {@code (XposedInterface, ModuleLoadedParam)}; the framework instantiates them through it.</li>
- * <li>Modules targeting API 101 rely on the no-arg constructor; the framework attaches the
- * framework interface through {@link XposedInterfaceWrapper#attachFramework(XposedInterface)}
+ * <li>Modules targeting API 101 or 102 rely on the no-arg constructor; the framework attaches the
+ * framework interface through {@link XposedInterfaceWrapper#attachFramework(XposedInterface, Runnable)}
  * and then invokes {@link XposedModuleInterface#onModuleLoaded(ModuleLoadedParam)}.</li>
  * </ul>
  */
@@ -31,7 +31,7 @@ public abstract class XposedModule extends XposedInterfaceWrapper implements Xpo
 
     /**
      * Instantiates a new Xposed module (API 101 style).<br/>
-     * The framework calls {@link #attachFramework(XposedInterface)} and then
+     * The framework calls {@link #attachFramework(XposedInterface, Runnable)} and then
      * {@link XposedModuleInterface#onModuleLoaded(ModuleLoadedParam)} after construction.
      */
     public XposedModule() {

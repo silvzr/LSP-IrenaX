@@ -18,6 +18,7 @@
  */
 
 #include "hook_bridge.h"
+#include "config_bridge.h"
 #include "native_util.h"
 #include "lsplant.hpp"
 #include <parallel_hashmap/phmap.h>
@@ -717,6 +718,86 @@ LSP_DEF_NATIVE_METHOD(jboolean, HookBridge, unhookMethod, jint apiMode, jobject 
     return JNI_FALSE;
 }
 
+LSP_DEF_NATIVE_METHOD(jboolean, HookBridge, replaceCallback, jint apiMode, jobject hookMethod,
+                      jobject oldCallback, jobject newCallback, jint newPriority) {
+    auto target = env->FromReflectedMethod(hookMethod);
+    HookItem * hook_item = nullptr;
+    hooked_methods.if_contains(target, [&hook_item](const auto &it) {
+        hook_item = it.second.get();
+    });
+    if (!hook_item) return JNI_FALSE;
+    jobject backup = hook_item->GetBackup();
+    if (!backup) return JNI_FALSE;
+    JNIMonitor monitor(env, backup);
+
+    std::multimap<jint, jobject, std::greater<>> *callbacks;
+    if (apiMode == API_MODE_LEGACY) {
+        callbacks = &hook_item->legacy_callbacks;
+    } else if (apiMode == API_MODE_100) {
+        callbacks = &hook_item->modern_callbacks;
+    } else if (apiMode == API_MODE_101) {
+        callbacks = &hook_item->api101_callbacks;
+    } else {
+        LOGW("Unknown apiMode {}", apiMode);
+        return JNI_FALSE;
+    }
+
+    for (auto i = callbacks->begin(); i != callbacks->end(); ++i) {
+        if (!env->IsSameObject(i->second, oldCallback)) continue;
+
+        // Nothing has been changed yet, so if this fails the caller's hook is still whatever it
+        // was and the caller can report the replacement as failed without having lost anything.
+        auto replacement = env->NewGlobalRef(newCallback);
+        if (!replacement) return JNI_FALSE;
+
+        env->DeleteGlobalRef(i->second);
+        if (i->first == newPriority) {
+            // Leaving the entry where it is is what "the replacement keeps the priority" means:
+            // erase and re-insert would move it behind the peers it shared a priority with.
+            i->second = replacement;
+        } else {
+            callbacks->erase(i);
+            callbacks->emplace(newPriority, replacement);
+        }
+        return JNI_TRUE;
+    }
+    return JNI_FALSE;
+}
+
+LSP_DEF_NATIVE_METHOD(jobjectArray, HookBridge, legacyApiPrefixes) {
+    // The four entries are the whole legacy surface the obfuscation table covers, in the dotted
+    // form the map is served in and loadClass is handed. Guarding only the package would leave
+    // the legacy resource API reachable.
+    static constexpr const char *kLegacyKeys[] = {
+            "de.robv.android.xposed.",
+            "android.app.AndroidApp",
+            "android.content.res.XRes",
+            "android.content.res.XModule",
+    };
+    constexpr jsize count = sizeof(kLegacyKeys) / sizeof(kLegacyKeys[0]);
+
+    auto string_class = env->FindClass("java/lang/String");
+    if (!string_class) return nullptr;
+    auto result = env->NewObjectArray(count, string_class, nullptr);
+    env->DeleteLocalRef(string_class);
+    if (!result) return nullptr;
+
+    auto *bridge = ConfigBridge::GetInstance();
+    for (jsize i = 0; i < count; ++i) {
+        std::string name = kLegacyKeys[i];
+        if (bridge) {
+            const auto &map = bridge->obfuscation_map();
+            // Absent means the map never arrived, and a build with no map is a build with no
+            // obfuscation, so the literal name is then the one the process will be asked for.
+            if (auto it = map.find(name); it != map.end()) name = it->second;
+        }
+        auto value = env->NewStringUTF(name.c_str());
+        env->SetObjectArrayElement(result, i, value);
+        env->DeleteLocalRef(value);
+    }
+    return result;
+}
+
 LSP_DEF_NATIVE_METHOD(jboolean, HookBridge, deoptimizeMethod, jobject hookMethod,
                       jclass hooker, jint priority, jobject callback) {
     return lsplant::Deoptimize(env, hookMethod);
@@ -838,6 +919,8 @@ LSP_DEF_NATIVE_METHOD(jint, HookBridge, gettid) {
 static JNINativeMethod gMethods[] = {
     LSP_NATIVE_METHOD(HookBridge, hookMethod, "(ILjava/lang/reflect/Executable;Ljava/lang/Class;ILjava/lang/Object;)Z"),
     LSP_NATIVE_METHOD(HookBridge, unhookMethod, "(ILjava/lang/reflect/Executable;Ljava/lang/Object;)Z"),
+    LSP_NATIVE_METHOD(HookBridge, replaceCallback, "(ILjava/lang/reflect/Executable;Ljava/lang/Object;Ljava/lang/Object;I)Z"),
+    LSP_NATIVE_METHOD(HookBridge, legacyApiPrefixes, "()[Ljava/lang/String;"),
     LSP_NATIVE_METHOD(HookBridge, deoptimizeMethod, "(Ljava/lang/reflect/Executable;)Z"),
     LSP_NATIVE_METHOD(HookBridge, invokeOriginalMethod,
                       "(Ljava/lang/reflect/Executable;Ljava/lang/Object;[Ljava/lang/Object;Z)Ljava/lang/Object;"),

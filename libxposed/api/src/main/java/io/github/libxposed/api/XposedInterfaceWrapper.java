@@ -20,17 +20,18 @@ import io.github.libxposed.api.utils.DexParser;
 /**
  * Wrapper of {@link XposedInterface} used by modules to shield framework implementation details.
  *
- * <p>Superset of the API 100 and API 101 wrappers: the base interface can be supplied either
- * through the package-private constructor (API 100) or through {@link #attachFramework(XposedInterface)}
- * (API 101).</p>
+ * <p>Superset of the API 100, API 101 and API 102 wrappers: the base interface can be supplied
+ * either through the package-private constructor (API 100) or through
+ * {@link #attachFramework(XposedInterface, Runnable)} (API 101 and 102).</p>
  */
 public class XposedInterfaceWrapper implements XposedInterface {
 
     private volatile XposedInterface mBase;
+    private volatile Runnable mDetachImpl;
 
     /**
      * Instantiates a wrapper without a base (API 101 style); the framework will attach the base
-     * through {@link #attachFramework(XposedInterface)}.
+     * through {@link #attachFramework(XposedInterface, Runnable)}.
      */
     public XposedInterfaceWrapper() {
     }
@@ -46,13 +47,40 @@ public class XposedInterfaceWrapper implements XposedInterface {
      * Attaches the framework interface to the module. Modules should never call this method.
      *
      * @param base The framework interface
+     * @param detachImpl What {@link #detach()} runs, supplied by the framework
      */
     @SuppressWarnings("unused")
-    public final void attachFramework(@NonNull XposedInterface base) {
+    public final void attachFramework(@NonNull XposedInterface base, @NonNull Runnable detachImpl) {
         if (mBase != null) {
             throw new IllegalStateException("Framework already attached");
         }
         mBase = base;
+        mDetachImpl = detachImpl;
+    }
+
+    /**
+     * Stops every subsequent lifecycle callback for <b>this</b> entry in this process (API 102).
+     *
+     * <p>The framework drops its reference to the entry that called this, so no further lifecycle
+     * callback - {@link XposedModuleInterface#onPackageLoaded}, {@link XposedModuleInterface#onHotReloading}
+     * and the rest - reaches it. A module with several entry classes keeps its other entries
+     * subscribed: only the one that called this is affected. Nothing else changes, so every
+     * {@link XposedInterface} call keeps working.</p>
+     *
+     * <p>Idempotent.</p>
+     *
+     * <p>This is not a way to unload a module. Whatever keeps the module's classloader reachable -
+     * installed hooks, threads, callbacks handed to system or app classes - has to be released as
+     * well, and the module is the only one that can do it.</p>
+     */
+    @SuppressWarnings("unused")
+    public final void detach() {
+        ensureAttached();
+        var detachImpl = mDetachImpl;
+        if (detachImpl == null) {
+            throw new IllegalStateException("This entry cannot detach");
+        }
+        detachImpl.run();
     }
 
     private void ensureAttached() {

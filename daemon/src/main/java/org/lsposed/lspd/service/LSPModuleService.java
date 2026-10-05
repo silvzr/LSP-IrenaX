@@ -49,6 +49,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.service.HookedProcess;
+import io.github.libxposed.service.IHotReloadCallback;
 import io.github.libxposed.service.IXposedScopeCallback;
 import io.github.libxposed.service.IXposedService;
 
@@ -57,6 +59,14 @@ public class LSPModuleService extends IXposedService.Stub {
     // Highest libxposed API version implemented by this framework. Modules declaring a
     // higher minApiVersion are rejected at load time (see ConfigFileManager#loadModule).
     static final int XPOSED_API_VERSION = XposedInterface.LIB_API;
+
+    /**
+     * The libxposed <b>service</b> API this framework implements, which is what a module app is
+     * told through {@link IXposedService#getApiVersion()}. It follows the surface the service
+     * submodule generates: the running-target list and the reload request arrived with the 102
+     * interface and are implemented below, so the reported level moves with the submodule.
+     */
+    static final int SERVICE_API_VERSION = IXposedService.LIB_API;
 
     private final static String TAG = "LSPosedModuleService";
 
@@ -240,6 +250,12 @@ public class LSPModuleService extends IXposedService.Stub {
     // from module.prop targetApiVersion (API 100 modules don't declare it), so
     // they keep working untouched. tbh idk if this survives the next API bump,
     // but it's the only way to serve both APIs right now.
+    //
+    // the 102 interface then renamed getAPIVersion to getApiVersion, turned the
+    // privilege ordinal into the properties bitmask this wire already served at 6,
+    // and added getRunningTargets/hotReloadModule at 13/14. the generated stub now
+    // speaks the newer shapes natively, and the manual branches below remain only
+    // for API 100 modules.
 
     private static final int TRANSACTION_GET_FRAMEWORK_PRIVILEGE = 6;
     private static final int TRANSACTION_REQUEST_SCOPE = 12;
@@ -292,9 +308,9 @@ public class LSPModuleService extends IXposedService.Stub {
     }
 
     @Override
-    public int getAPIVersion() throws RemoteException {
+    public int getApiVersion() throws RemoteException {
         ensureModule();
-        return XPOSED_API_VERSION;
+        return SERVICE_API_VERSION;
     }
 
     @Override
@@ -315,14 +331,17 @@ public class LSPModuleService extends IXposedService.Stub {
         return BuildConfig.VERSION_CODE;
     }
 
-    @Override
-    public int getFrameworkPrivilege() throws RemoteException {
+    // API 100 wire: the privilege as an ordinal. the 102 interface replaced it with
+    // the getFrameworkProperties() bitmask and no longer carries the constants.
+    private static final int FRAMEWORK_PRIVILEGE_ROOT = 0;
+
+    int getFrameworkPrivilege() throws RemoteException {
         ensureModule();
-        return IXposedService.FRAMEWORK_PRIVILEGE_ROOT;
+        return FRAMEWORK_PRIVILEGE_ROOT;
     }
 
-    // API 101 wire: framework capabilities as a bitmask (XposedInterface#PROP_*)
-    long getFrameworkProperties() throws RemoteException {
+    @Override
+    public long getFrameworkProperties() throws RemoteException {
         ensureModule();
         var properties = XposedInterface.PROP_CAP_SYSTEM | XposedInterface.PROP_CAP_REMOTE;
         if (ConfigManager.getInstance().dexObfuscate()) {
@@ -343,22 +362,21 @@ public class LSPModuleService extends IXposedService.Stub {
         return res;
     }
 
-    @Override
-    public void requestScope(String packageName, IXposedScopeCallback callback) throws RemoteException {
+    // API 100 wire: single-package scope request. the 102 callback interface only
+    // carries approved(List) and failed(message), so prompted and denied ride the
+    // hand-built 100 parcels in LSPNotificationManager.
+    void requestScope(String packageName, IXposedScopeCallback callback) throws RemoteException {
         var userId = ensureModule();
         if (ConfigManager.getInstance().scopeRequestBlocked(loadedModule.packageName, userId)) {
-            callback.onScopeRequestDenied(packageName);
+            LSPNotificationManager.notifyScopeRequestDenied(callback, false, packageName, "Blocked by user");
         } else {
             LSPNotificationManager.requestModuleScope(loadedModule.packageName, userId, packageName, callback, false);
-            callback.onScopeRequestPrompted(packageName);
+            LSPNotificationManager.notifyScopeRequestPrompted(callback, false, packageName);
         }
     }
 
-    // API 101 wire: bulk scope request. reuses the per-package notification flow of
-    // API 100, only the callback delivery differs (onScopeRequestApproved(List) /
-    // onScopeRequestFailed(String)). could've ported irena's bulk notification, but
-    // that'd mean rewriting the whole intent plumbing for little gain.
-    void requestScope(List<String> packages, IXposedScopeCallback callback) throws RemoteException {
+    @Override
+    public void requestScope(List<String> packages, IXposedScopeCallback callback) throws RemoteException {
         Objects.requireNonNull(packages, "packages cannot be null");
         Objects.requireNonNull(callback, "callback cannot be null");
         var userId = ensureModule();
@@ -375,8 +393,8 @@ public class LSPModuleService extends IXposedService.Stub {
         }
     }
 
-    @Override
-    public String removeScope(String packageName) throws RemoteException {
+    // API 100 wire: single-package scope removal with an error string.
+    String removeScope(String packageName) throws RemoteException {
         var userId = ensureModule();
         try {
             if (!ConfigManager.getInstance().removeModuleScope(loadedModule.packageName, packageName, userId)) {
@@ -388,9 +406,8 @@ public class LSPModuleService extends IXposedService.Stub {
         }
     }
 
-    // API 101 wire: bulk scope removal. the wire returns void, so errors come back
-    // as a RemoteException instead of an error string.
-    void removeScope(List<String> packages) throws RemoteException {
+    @Override
+    public void removeScope(List<String> packages) throws RemoteException {
         Objects.requireNonNull(packages, "packages cannot be null");
         var userId = ensureModule();
         for (var packageName : packages) {
@@ -406,6 +423,22 @@ public class LSPModuleService extends IXposedService.Stub {
                 throw re;
             }
         }
+    }
+
+    @Override
+    public List<HookedProcess> getRunningTargets() throws RemoteException {
+        ensureModule();
+        return LSPApplicationService.getRunningTargets(loadedModule.packageName);
+    }
+
+    @Override
+    public void hotReloadModule(long targetId, Bundle data, IHotReloadCallback callback) throws RemoteException {
+        ensureModule();
+        var processInfo = LSPApplicationService.findProcessByTargetId(targetId);
+        if (processInfo == null || !LSPApplicationService.isModuleInScope(processInfo, loadedModule.packageName)) {
+            throw new SecurityException("Hot reload target " + targetId + " does not belong to " + loadedModule.packageName);
+        }
+        LSPApplicationService.requestServiceHotReload(processInfo, loadedModule.packageName, data, callback);
     }
 
     @Override

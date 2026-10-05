@@ -436,20 +436,23 @@ public class ConfigFileManager {
         if (apkFile.getEntry("META-INF/xposed/java_init.list") == null) return null;
         var properties = readModuleProperties(apkFile);
         if (properties == null) return null;
-        int minApiVersion = readApiVersion(properties, "minApiVersion");
-        int targetApiVersion = readApiVersion(properties, "targetApiVersion");
-        if (minApiVersion > LSPModuleService.XPOSED_API_VERSION) return null;
-        if (targetApiVersion < LSPModuleService.XPOSED_API_VERSION) return null;
+        // minApiVersion is the module's own floor, the oldest API it is written to run on, and it
+        // is the only thing that decides whether we can load it. targetApiVersion is what the
+        // module was built against and says nothing about what it accepts: "minApiVersion=101,
+        // targetApiVersion=102" is a module that guards its 102 calls at runtime and runs fine on
+        // 101. Comparing either against our own version retires modules the moment LIB_API moves.
+        if (readApiVersion(properties, "minApiVersion") > LSPModuleService.XPOSED_API_VERSION) return null;
         return properties;
     }
 
+    /**
+     * Whether an APK is a libxposed module this framework is too old to load, which is a different
+     * answer from "not a module at all": such an APK must not fall through to the legacy path.
+     */
     static boolean requiresModernModuleLoading(ZipFile apkFile) {
         var properties = readModuleProperties(apkFile);
         if (properties == null) return false;
-        int minApiVersion = readApiVersion(properties, "minApiVersion");
-        int targetApiVersion = readApiVersion(properties, "targetApiVersion");
-        return minApiVersion > LSPModuleService.XPOSED_API_VERSION
-                || targetApiVersion >= LSPModuleService.XPOSED_API_VERSION;
+        return readApiVersion(properties, "minApiVersion") > LSPModuleService.XPOSED_API_VERSION;
     }
 
     private static boolean isExceptionPassthrough(Properties properties) {
@@ -457,6 +460,18 @@ public class ConfigFileManager {
             return false;
         }
         return "passthrough".equals(properties.getProperty("exceptionMode", "").trim());
+    }
+
+    /**
+     * Whether the module opted into being reloaded when its package is updated, which is what
+     * {@code autoHotReload = true} in module.prop asks for (API 102). Off unless declared, because
+     * a reload retires the old generation and a module has to be written for that.
+     */
+    private static boolean isAutoHotReload(Properties properties) {
+        if (properties == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(properties.getProperty("autoHotReload", "").trim());
     }
 
     @Nullable
@@ -482,6 +497,7 @@ public class ConfigFileManager {
                 file.legacy = false;
                 readName(apkFile, "META-INF/xposed/native_init.list", moduleLibraryNames);
                 file.exceptionPassthrough = isExceptionPassthrough(properties);
+                file.autoHotReload = isAutoHotReload(properties);
                 if (properties != null) {
                     // libxposed API version the module was built against. API 100 modules
                     // don't declare it, so 0 means "speaks API 100" (LSPModuleService#speaksApi101)

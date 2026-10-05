@@ -24,6 +24,30 @@ public class HookBridge {
 
     public static native boolean unhookMethod(int apiMode, Executable hookMethod, Object callback);
 
+    /**
+     * Swaps {@code oldCallback} for {@code newCallback} on {@code hookMethod} under the lock
+     * {@link #callbackSnapshot} takes, so no snapshot can observe both or neither.
+     *
+     * <p>A snapshot taken before this returns keeps running the old callback: it copied the
+     * reference into an array of its own. That is what makes a replacement invisible to a call
+     * already in flight, which is what {@code HookHandle#replaceHook} promises.</p>
+     *
+     * <p>Returns false when {@code oldCallback} is not registered anymore, which tells the caller
+     * the handle it holds has already been replaced or unhooked.</p>
+     */
+    public static native boolean replaceCallback(int apiMode, Executable hookMethod, Object oldCallback, Object newCallback, int newPriority);
+
+    /**
+     * The class name prefixes of the legacy {@code de.robv} API as this process will actually be
+     * asked for them, which is not what they are called in source: with dex obfuscation on the
+     * daemon rewrites those prefixes in the framework dex and in every module dex to a different
+     * random string on every boot.
+     *
+     * <p>A module targeting API 102 or higher may not reach any of them, and the module class
+     * loader is the only place that can be enforced.</p>
+     */
+    public static native String[] legacyApiPrefixes();
+
     public static native boolean deoptimizeMethod(Executable method);
 
     public static native <T> T allocateObject(Class<T> clazz) throws InstantiationException;

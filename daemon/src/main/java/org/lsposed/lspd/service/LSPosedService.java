@@ -178,6 +178,33 @@ public class LSPosedService extends ILSPosedService.Stub {
                     }
                 }
                 broadcastAndShowNotification(moduleName, userId, intent, isXposedModule);
+
+                if (isXposedModule && intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
+                    // API 102: the module's code on disk just changed, so hand the new one to the
+                    // processes already running the old one instead of waiting for them to die with
+                    // it.
+                    configManager.updateCache();
+                    // updateCache() refreshes a module only when its apk path moved, and an update
+                    // does not have to move it - so the dex is read here as well, or the reload
+                    // would hand every process the very build it is already running and report
+                    // success.
+                    var refreshed = configManager.refreshModule(moduleName);
+                    var build = configManager.getModuleBuild(moduleName);
+                    if (!refreshed) {
+                        Log.w(TAG, "Cannot re-read " + moduleName + " after updating it, not reloading: "
+                                + "processes in its scope keep running the old build");
+                    } else {
+                        var dispatch = LSPApplicationService.requestHotReload(moduleName);
+                        Log.i(TAG, "Update of " + moduleName + ": " + dispatch);
+                        if (dispatch.stale > 0) {
+                            Log.w(TAG, dispatch.stale + " process(es) in the scope of " + moduleName
+                                    + " still run an older build" + (dispatch.asked > 0
+                                    ? "; they were asked to reload, which they may refuse"
+                                    : " and the module did not opt into reloading, so only a restart updates them"));
+                        }
+                        Log.d(TAG, moduleName + " is now " + build);
+                    }
+                }
             }
             case Intent.ACTION_UID_REMOVED -> {
                 // when a package is removed (rather than hide) for a single user

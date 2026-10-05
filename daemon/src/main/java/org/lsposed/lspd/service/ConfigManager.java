@@ -1236,6 +1236,76 @@ public class ConfigManager {
         return null;
     }
 
+    /** The cached module with this package name, or {@code null} if it is not a module any more. */
+    @Nullable
+    public Module getModuleByPackage(String packageName) {
+        return cachedModule.get(packageName);
+    }
+
+    /**
+     * A cheap identity of the module build currently on disk.
+     *
+     * <p>Path, size and mtime rather than the package version code: what a reload has to answer is
+     * "is the code this process is running the code that is on disk now", and a rebuilt module can
+     * be installed without its version code moving.</p>
+     *
+     * @return {@code null} when the module is not cached, i.e. not installed any more
+     */
+    @Nullable
+    public String getModuleBuild(String packageName) {
+        var module = cachedModule.get(packageName);
+        if (module == null || module.apkPath == null) return null;
+        var apk = toGlobalNamespace(module.apkPath);
+        return module.apkPath + '#' + apk.length() + '#' + apk.lastModified();
+    }
+
+    /**
+     * Re-reads one module's APK and swaps the cached dex for what is on disk now.
+     *
+     * <p>Needed before a hot reload, because the ordinary cache pass deliberately skips a module
+     * whose apk path is unchanged - and an update does not have to move it. Handing a process the
+     * dex it is already running makes the reload succeed and change nothing, which is the worst
+     * of both outcomes. The cached {@link Module} is updated in place so every reader - the scope
+     * table, the injected processes and the module's own service - sees the same one.</p>
+     *
+     * @return whether a fresh copy was read
+     */
+    public boolean refreshModule(String packageName) {
+        var module = cachedModule.get(packageName);
+        if (module == null) {
+            Log.w(TAG, "Cannot refresh " + packageName + ", it is not a cached module");
+            return false;
+        }
+        var apkPath = module.apkPath;
+        try {
+            // The update may have moved the apk and, either way, the module's application info is
+            // the one the updated package has, not the one it had when it was first cached.
+            var moduleInfo = PackageMonitorService.getInstance().getModuleInfo(packageName, -1);
+            if (moduleInfo != null) {
+                if (moduleInfo.apkPath != null) apkPath = moduleInfo.apkPath;
+                module.appId = moduleInfo.appId;
+                module.applicationInfo = moduleInfo.applicationInfo;
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "Cannot read the package info of " + packageName, e);
+        }
+        if (apkPath == null) return false;
+        var file = ConfigFileManager.loadModule(apkPath, dexObfuscate);
+        if (file == null) {
+            Log.w(TAG, "Cannot re-read module " + packageName);
+            return false;
+        }
+        // Publishing a file built for a legacy module over a modern one would change how the
+        // process loads it; refuse rather than half-swap.
+        if (file.legacy != (module.file == null || module.file.legacy)) {
+            Log.w(TAG, "Module " + packageName + " changed between the legacy and the modern API");
+            return false;
+        }
+        module.apkPath = apkPath;
+        module.file = file;
+        return true;
+    }
+
     private void walkFileTree(Path rootDir, Consumer<Path> action) throws IOException {
         if (Files.notExists(rootDir)) return;
         Files.walkFileTree(rootDir, new SimpleFileVisitor<>() {

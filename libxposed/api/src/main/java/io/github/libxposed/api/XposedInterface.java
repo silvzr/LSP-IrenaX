@@ -22,9 +22,9 @@ import io.github.libxposed.api.utils.DexParser;
 /**
  * Xposed interface for modules to operate on application processes.
  *
- * <p>This is a superset of the libxposed API 100 and API 101 surfaces. Modules compiled
- * against either published version run against this interface: the members of both APIs
- * are present here, and the framework dispatches each call to the matching engine
+ * <p>This is a superset of the libxposed API 100, API 101 and API 102 surfaces. Modules
+ * compiled against any published version run against this interface: the members of every
+ * API are present here, and the framework dispatches each call to the matching engine
  * automatically (overloads resolve to the API 100 or API 101 code path at the call site).
  * </p>
  */
@@ -71,10 +71,29 @@ public interface XposedInterface {
     int API_101 = 101;
 
     /**
+     * The API version of the libxposed 102 surface.
+     *
+     * <p>What is new in 102:</p>
+     * <ul>
+     * <li>Hooks may carry an id, and a hooker may be replaced atomically, either by reusing an
+     * id or through {@link HookHandle#replaceHook(Hooker)}.</li>
+     * <li>A module can be hot reloaded into a process that is already running it.</li>
+     * </ul>
+     *
+     * <p>What changes for modules targeting 102 or higher:</p>
+     * <ul>
+     * <li>The legacy {@code de.robv.android.xposed} API is out of reach. It is global static
+     * state with no notion of generations, so anything holding on to it outlives a reload in a
+     * way the framework cannot clean up.</li>
+     * </ul>
+     */
+    int API_102 = 102;
+
+    /**
      * The API version of this <b>library</b>. Modules should use {@link #getApiVersion()}
      * to check the API version at runtime.
      */
-    int LIB_API = API_101;
+    int LIB_API = API_102;
 
     /**
      * The framework has the capability to hook system_server and other system processes.
@@ -368,6 +387,33 @@ public interface XposedInterface {
          * Cancels the hook. This method is idempotent.
          */
         void unhook();
+
+        /**
+         * Gets the id this hook was registered with (API 102), or {@code null} when it was
+         * registered without one.
+         */
+        @Nullable
+        String getId();
+
+        /**
+         * Atomically replaces this hook's hooker and returns the handle of the new hook (API 102).
+         *
+         * <p>The executable, the priority, the exception handling mode and the id are inherited
+         * from this hook. The chain is snapshot based: a call that is already running keeps
+         * executing the hooker it started with, and no call ever observes the hook half
+         * replaced.</p>
+         *
+         * <p>The typical caller is {@link XposedModuleInterface#onHotReloaded}, which receives the
+         * handles of the previous generation through
+         * {@link XposedModuleInterface.HotReloadedParam#getOldHookHandles()}.</p>
+         *
+         * @param hooker The hooker that takes over
+         * @return The handle of the replacement hook
+         * @throws IllegalArgumentException if the hooker is null
+         * @throws IllegalStateException    if this handle has already been superseded
+         */
+        @NonNull
+        HookHandle replaceHook(@NonNull Hooker hooker);
     }
 
     /**
@@ -403,6 +449,22 @@ public interface XposedInterface {
          * Sets the exception handling mode for the hook.
          */
         HookBuilder setExceptionMode(@NonNull ExceptionMode mode);
+
+        /**
+         * Sets the id of the hook (API 102), {@code null} by default.
+         *
+         * <p>An id names one hook of one module on one executable. Registering a second hook with
+         * an id already in use replaces the first one atomically, and the handle of the first one
+         * stops being valid; ids are not shared between modules. Hooks registered without an id
+         * are never replaced, they simply accumulate.</p>
+         *
+         * <p>This is the declaration-site form of {@link HookHandle#replaceHook(Hooker)}: a module
+         * that knows an id up front can let the framework do the replacement at registration
+         * time, instead of looking the old handle up itself.</p>
+         *
+         * @param id The id, or {@code null} to register a hook that cannot be replaced by id
+         */
+        HookBuilder setId(@Nullable String id);
 
         /**
          * Sets the hooker for the method / constructor and builds the hook.

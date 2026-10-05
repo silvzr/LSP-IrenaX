@@ -246,45 +246,50 @@ public class LSPNotificationManager {
     }
 
     private static final String SCOPE_CALLBACK_DESCRIPTOR = "io.github.libxposed.service.IXposedScopeCallback";
-    // API 101 IXposedScopeCallback transaction codes. these collide with the API 100
-    // ones, so we can't just call the interface directly (see notifyScopeRequest* below):
-    //   2 = onScopeRequestApproved(List<String>), 3 = onScopeRequestFailed(String)
-    // (AIDL-declared 1/2, +1 like every IXposedService code)
+    // IXposedScopeCallback transaction codes. the interface compiled into the daemon now
+    // declares approved(List) = 1 and failed(String) = 2 - wires 2 and 3 - and those are
+    // all the methods the 102 surface has left on it.
     private static final int SCOPE_CALLBACK_APPROVED_TRANSACTION = 2;
     private static final int SCOPE_CALLBACK_FAILED_TRANSACTION = 3;
+    // API 100 callback codes (declared 1-5, +1 like every IXposedService code). they
+    // collide with the ones above, so every parcel is built by hand and sent on the
+    // wire the module app was built with.
+    private static final int SCOPE_CALLBACK_V100_PROMPTED_TRANSACTION = 2;
+    private static final int SCOPE_CALLBACK_V100_APPROVED_TRANSACTION = 3;
+    private static final int SCOPE_CALLBACK_V100_DENIED_TRANSACTION = 4;
+    private static final int SCOPE_CALLBACK_V100_TIMEOUT_TRANSACTION = 5;
+    private static final int SCOPE_CALLBACK_V100_FAILED_TRANSACTION = 6;
 
-    // deliver scope results on the wire the module was built with. API 100 modules get
-    // per-package callbacks (approved/denied/timeout/failed with a package name),
-    // API 101 modules get onScopeRequestApproved(List) and onScopeRequestFailed(String).
-    // the 101 codes collide with the 100 ones, so those parcels are built by hand.
-    // tbh it's ugly, but the daemon still compiles against the API 100 AIDL.
     static void notifyScopeRequestApproved(IXposedScopeCallback callback, boolean api101, String scopePackageName) throws RemoteException {
-        if (api101) {
-            var data = Parcel.obtain();
-            try {
-                data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+        var data = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+            if (api101) {
                 data.writeStringList(List.of(scopePackageName));
                 callback.asBinder().transact(SCOPE_CALLBACK_APPROVED_TRANSACTION, data, null, Binder.FLAG_ONEWAY);
-            } finally {
-                data.recycle();
+            } else {
+                data.writeString(scopePackageName);
+                callback.asBinder().transact(SCOPE_CALLBACK_V100_APPROVED_TRANSACTION, data, null, Binder.FLAG_ONEWAY);
             }
-        } else {
-            callback.onScopeRequestApproved(scopePackageName);
+        } finally {
+            data.recycle();
         }
     }
 
     static void notifyScopeRequestFailed(IXposedScopeCallback callback, boolean api101, String scopePackageName, String message) throws RemoteException {
-        if (api101) {
-            var data = Parcel.obtain();
-            try {
-                data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+        var data = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+            if (api101) {
                 data.writeString(message);
                 callback.asBinder().transact(SCOPE_CALLBACK_FAILED_TRANSACTION, data, null, Binder.FLAG_ONEWAY);
-            } finally {
-                data.recycle();
+            } else {
+                data.writeString(scopePackageName);
+                data.writeString(message);
+                callback.asBinder().transact(SCOPE_CALLBACK_V100_FAILED_TRANSACTION, data, null, Binder.FLAG_ONEWAY);
             }
-        } else {
-            callback.onScopeRequestFailed(scopePackageName, message);
+        } finally {
+            data.recycle();
         }
     }
 
@@ -292,7 +297,7 @@ public class LSPNotificationManager {
         if (api101) {
             notifyScopeRequestFailed(callback, true, scopePackageName, message101);
         } else {
-            callback.onScopeRequestDenied(scopePackageName);
+            transactScopeCallbackV100(callback, SCOPE_CALLBACK_V100_DENIED_TRANSACTION, scopePackageName);
         }
     }
 
@@ -300,7 +305,25 @@ public class LSPNotificationManager {
         if (api101) {
             notifyScopeRequestFailed(callback, true, scopePackageName, message101);
         } else {
-            callback.onScopeRequestTimeout(scopePackageName);
+            transactScopeCallbackV100(callback, SCOPE_CALLBACK_V100_TIMEOUT_TRANSACTION, scopePackageName);
+        }
+    }
+
+    // the 102 callback has no prompted ping left on it, so prompted only reaches the 100 wire
+    static void notifyScopeRequestPrompted(IXposedScopeCallback callback, boolean api101, String scopePackageName) throws RemoteException {
+        if (!api101) {
+            transactScopeCallbackV100(callback, SCOPE_CALLBACK_V100_PROMPTED_TRANSACTION, scopePackageName);
+        }
+    }
+
+    private static void transactScopeCallbackV100(IXposedScopeCallback callback, int transaction, String scopePackageName) throws RemoteException {
+        var data = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(SCOPE_CALLBACK_DESCRIPTOR);
+            data.writeString(scopePackageName);
+            callback.asBinder().transact(transaction, data, null, Binder.FLAG_ONEWAY);
+        } finally {
+            data.recycle();
         }
     }
 

@@ -33,7 +33,9 @@ public class LSPInjectedModuleService extends ILSPInjectedModuleService.Stub {
 
     @Override
     public int getFrameworkPrivilege() {
-        return IXposedService.FRAMEWORK_PRIVILEGE_ROOT;
+        // this wire keeps the old ordinal; the constant it used to borrow from
+        // IXposedService is gone from the 102 interface, and the value was 0.
+        return 0;
     }
 
     @Override
